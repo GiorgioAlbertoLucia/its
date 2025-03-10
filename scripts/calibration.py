@@ -5,10 +5,9 @@
 import numpy as np
 import pandas as pd
 from ROOT import TFile, TF1, TCanvas
-from ROOT import RooRealVar, RooCrystalBall, RooExponential, RooGaussian, RooAddPdf
+from ROOT import RooRealVar, RooCrystalBall, RooGaussian, RooAddPdf
 from torchic import Dataset, AxisSpec
 
-from torchic.physics import cluster_size_calibration
 from torchic.physics.ITS import average_cluster_size, expected_cluster_size, sigma_its
 
 import sys
@@ -61,7 +60,8 @@ def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str,
 
     cfg = CONF[particle]
 
-    dataset['fAvgClusterSize'], __ = average_cluster_size(dataset['fItsClusterSize'])
+    dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'])
+    dataset.query('fNHitsIts > 5', inplace=True)
     dataset['fAvgClSizeCosLam'] = dataset['fAvgClusterSize'] / np.cosh(dataset['fEta'])
     dataset['fBetaGamma'] = abs(dataset['fP']) / ParticleMasses[particle]
 
@@ -109,7 +109,7 @@ def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str,
         bg_high_edge = h2_clsize.GetXaxis().GetBinLowEdge(bg_bin+1)
         
         model = None
-        if particle == 'Pi' or particle == 'Pr' or (particle == 'He' and bg < 2.5):
+        if (particle == 'He' and bg < 2.5):
             sig_frac = RooRealVar('sig_frac', 'sig_frac', 0.5, 0., 1.)
             model = RooAddPdf('model', 'signal + bkg', [signal, bkg], [sig_frac])
         else:
