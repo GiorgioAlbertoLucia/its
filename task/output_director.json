@@ -1,0 +1,13 @@
+{ "OutputDirector": {
+    "debug_mode": true,
+    "resfile": "LHC24an_pass1",
+    "OutputDescriptors": [
+        {
+            "table": "AOD/CLSTTABLE/0"
+        },
+        {
+            "table": "AOD/CLSTTABLEEXTRA/0"
+        }
+    ],
+    "ntfmerge": 1
+  } }
