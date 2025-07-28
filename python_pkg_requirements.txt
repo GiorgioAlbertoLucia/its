@@ -1,0 +1,17 @@
+numpy
+pandas
+uproot
+matplotlib
+pyyaml
+xgboost
+git+https://github.com/hipe4ml/hipe4ml@dev
+optuna
+particle
+scikit-learn
+shap
+torch
+torchic
+hepstats
+mplhep
+boost-histogram
+zfit
