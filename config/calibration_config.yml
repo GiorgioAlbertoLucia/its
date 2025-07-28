@@ -1,0 +1,18 @@
+input_opts: [
+  {
+    infile_path: ['/data/galucia/its_pid/pass7/LHC22o_pass7_minBias_small.root',
+                  '/data/galucia/its_pid/pass7/LHC22o_pass7_minBias_small.root',],
+    folder_name: 'DF*', 
+    tree_name: O2clsttable,
+  },
+  {
+    infile_path: ['/data/galucia/its_pid/LHC23_pass4_skimmed/LHC23_pass4_skimmed.root',],
+    folder_name: 'DF*',
+    tree_name: O2clsttableextra,
+  },
+
+]
+
+outfile_path: '/home/galucia/its/output/calibration.root'
+outcsv_path:  '/home/galucia/its/output/calibration.csv'
+            
