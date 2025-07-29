@@ -18,7 +18,7 @@ from torchic.core.graph import create_graph
 from calibration_utils import calibration_fit_slice, initialize_means_and_sigmas
 import sys
 sys.path.append('..')
-from utils.pid_routine import standard_selections, define_variables, PARTICLE_ID
+from utils.pid_routine import standard_selections, define_variables
 
 DATASET_COLUMN_NAMES = {
     'P': 'fTPCInnerParam',
@@ -96,7 +96,7 @@ def init_background_roofit(nsigma_tpc: RooRealVar, function: str = 'gaus'):
 def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
 
     g_mean = create_graph(fit_results, 'bg', 'mean', 'bg_err', 'mean_err', 
-                            f'g_mean_{sign}', ';#beta#gamma;#LT m_{TOF} #GT (GeV/#it{c}^{2})')
+                            f'g_mean_{sign}', ';#beta#gamma;#LT #mathrm{d}E/#mathrm{d}x #GT (GeV/#it{c}^{2})')
     
     f_mean = TF1('f_mean', BetheBloch, BETAGAMMA_MIN, BETAGAMMA_MAX, 5)
     f_mean.SetParameters(-241.4902, 0.374245, 1.397847, 1.0782504, 2.048336)
@@ -104,7 +104,7 @@ def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
     fit_params = [f_mean.GetParameter(i) for i in range(5)]
     
     g_resolution = create_graph(fit_results, 'bg', 'resolution', 'bg_err', 'resolution_err', 
-                                f'g_resolution_{sign}', ';#beta#gamma;#sigma_{m_{TOF}} / #LT m_{TOF} #GT')
+                                f'g_resolution_{sign}', ';#beta#gamma;#sigma_{TPC} / #LT #mathrm{d}E/#mathrm{d}x #GT')
 
     BETAGAMMA_MIN_RES, BETAGAMMA_MAX_RES = 0.6, 3
     f_resolution = TF1('f_resolution', '[0]', BETAGAMMA_MIN_RES, BETAGAMMA_MAX_RES)
@@ -115,7 +115,7 @@ def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
     g_mean.Write()
     g_resolution.Write()
 
-    return fit_params
+    return fit_params, f_resolution.GetParameter(0)
 
 def TPC_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_COLUMN_NAMES):
 
@@ -175,26 +175,26 @@ def TPC_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_C
             ifit_result['bg_err'] = bg_step / 2
             fit_results.append(ifit_result)
 
-            canvas = TCanvas(f'cNSigmaTPC_{bg:.2f}', f'cNSigmaTPC_{bg:.2f}', 800, 600)
+            canvas = TCanvas(f'TPCfit_{bg:.2f}', f'#beta#gamma = {bg:.2f}', 800, 600)
             iframe.Draw()
             tpc_dir.cd()
             canvas.Write()
         fit_results_df = pd.DataFrame(fit_results)
         
-        fit_params = fit_parametrisation(fit_results_df, sign, tpc_dir)
+        fit_params, resolution = fit_parametrisation(fit_results_df, sign, tpc_dir)
 
-    return fit_params
+    return fit_params, resolution
 
-def visualize_distributions_and_fit(dataset: Dataset, outfile: TFile, fit_params:list, column_names:dict=DATASET_COLUMN_NAMES):
+def visualize_distributions_and_fit(dataset: Dataset, outfile: TFile, fit_params:list, resolution:float, column_names:dict=DATASET_COLUMN_NAMES):
 
     np_bethe_bloch = np.vectorize(py_BetheBloch)
 
     dataset['fExpTpcSignal'] = np_bethe_bloch(np.abs(dataset['fBetaGamma']), *fit_params)
-    dataset['fNSigmaTPC'] = (dataset[column_names['TpcSignal']] - dataset['fExpTpcSignal']) / (dataset['fExpTpcSignal'] * 0.09)
+    dataset['fNSigmaTPC'] = (dataset[column_names['TpcSignal']] - dataset['fExpTpcSignal']) / (dataset['fExpTpcSignal'] * resolution)
 
     axis_spec_betagamma = AxisSpec(160, -8, 8, 'beta_gamma', ';#beta#gamma;dE/dx (a.u.)')
-    axis_spec_tpcsignal = AxisSpec(100, 0, 1200, 'tpc_signal', ';#beta#gamma;dE/dx (a.u.)')
-    axis_spec_nsigmatpc = AxisSpec(100, -5, 5, 'nsigma_tpc', ';#beta#gamma;#LT m_{TOF} #GT (GeV/#it{c}^{2})')
+    axis_spec_tpcsignal = AxisSpec(100, 0, 1200, 'tpc_signal', ';#beta#gamma;#mathrm{d}E/#mathrm{d}x (a.u.)')
+    axis_spec_nsigmatpc = AxisSpec(100, -5, 5, 'nsigma_tpc', ';#beta#gamma;n#sigma_{TPC}')
     axis_spec_clsize = AxisSpec(90, 0, 15., 'cl_size', ';#beta#gamma;#LT ITS cluster size (a.u.)#GT #times #LT cos#lambda#GT')
 
     h2_nsigmatpc = dataset.build_th2('fBetaGamma', 'fNSigmaTPC', axis_spec_betagamma, axis_spec_nsigmatpc)
@@ -242,8 +242,8 @@ if __name__ == '__main__':
     standard_selections(dataset, particle='He', DATASET_COLUMN_NAMES=DATASET_COLUMN_NAMES)
     outfile = TFile('output/TPC_he.root', 'recreate')
 
-    fit_params = TPC_calibration(dataset, outfile, column_names)
-    visualize_distributions_and_fit(dataset, outfile, fit_params, column_names)
+    fit_params, resolution = TPC_calibration(dataset, outfile, column_names)
+    visualize_distributions_and_fit(dataset, outfile, fit_params, resolution, column_names)
 
     outfile.Close()
     
