@@ -57,7 +57,6 @@ def define_variables(dataset: Dataset, **kwargs):
     dataset['fAvgClSizeMean'] = average_cluster_size_with_mean(dataset[cols['ItsClusterSize']])
     dataset['fAvgClSizeCosLamMean'] = dataset['fAvgClSizeMean'] / np.cosh(dataset[cols['Eta']])
 
-    dataset[cols['P']] = np.abs(dataset[cols['P']])
     dataset[cols['Pt']] = dataset[cols['P']] / np.cosh(dataset[cols['Eta']])
 
 def visualize_dataset(dataset: Dataset, outfile):
