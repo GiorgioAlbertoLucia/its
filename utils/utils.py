@@ -1,5 +1,91 @@
 import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from ROOT import RooRealVar, RooDataHist, TH1F, TGraphErrors
+
+def initialize_means_and_covariances_kmeans(hist: TH1F, n_components: int):
+    '''
+        Initialize means and sigmas using KMeans clustering.
+        They are ordered from the lowest mean value to the highest.
+        hist: histogram to be fitted
+        n_components: number of components to fit
+    '''
+
+    data_points = []
+    for ibin in range(1, hist.GetNbinsX()+1):
+        data_points.extend([hist.GetBinCenter(ibin)] * int(hist.GetBinContent(ibin)))
+
+    data_points = np.array(data_points)
+
+    if len(data_points) <= 0:
+        print('No data points to fit')
+        return
+
+    kmeans = KMeans(n_clusters=n_components, init='k-means++', n_init='auto').fit(data_points.reshape(-1, 1))
+    centers = kmeans.cluster_centers_
+    labels = kmeans.labels_
+
+    covariances = []
+    for icomp in range(n_components):
+        comp_data = data_points[np.where(np.array(labels)==icomp)[0]]
+        covariances.append(np.cov(comp_data.T))
+
+    # Sort centers and get the sorted indices
+    sorted_indices = np.argsort(centers.flatten())
+    #sorted_indices = sorted_indices[::-1]
+
+    # Reorder centers, covariances, and weights based on the sorted indices
+    centers = centers[sorted_indices]
+    centers = [center[0] for center in centers]
+    covariances = [float(covariances[i]) for i in sorted_indices]
+    return centers, covariances
+
+def initialize_means_and_covariances_gaussian_mixture(hist: TH1F, n_components: int):
+    '''
+        Initialize means and sigmas using KMeans clustering.
+        They are ordered from the lowest mean value to the highest.
+        hist: histogram to be fitted
+        n_components: number of components to fit
+    '''
+
+    data_points = []
+    for ibin in range(1, hist.GetNbinsX()+1):
+        data_points.extend([hist.GetBinCenter(ibin)] * int(hist.GetBinContent(ibin)))
+
+    data_points = np.array(data_points).reshape(-1, 1)
+
+    if len(data_points) <= 0:
+        print('No data points to fit')
+        return
+
+    gaussian_mixture = GaussianMixture(n_components=n_components, covariance_type='full', n_init=10)
+    gaussian_mixture.fit(data_points)
+
+    centers = gaussian_mixture.means_.flatten()
+    covariances = gaussian_mixture.covariances_.flatten()
+    
+    sorted_indices = np.argsort(centers)
+    centers = centers[sorted_indices]
+    covariances = [covariances[i] for i in sorted_indices]
+    return centers, covariances
+
+_intialise_means_and_covariances = {
+    'kmeans': initialize_means_and_covariances_kmeans,
+    'gaussian_mixture': initialize_means_and_covariances_gaussian_mixture
+}
+
+def initialize_means_and_covariances(hist: TH1F, n_components: int, method='gaussian_mixture'):
+    '''
+        Initialize means and covariances using the specified method.
+        hist: histogram to be fitted
+        n_components: number of components to fit
+        method: method to use for initialization ('kmeans' or 'gaussian_mixture')
+    '''
+
+    if method not in _intialise_means_and_covariances:
+        raise ValueError(f'Unknown method {method}. Available methods are {list(_intialise_means_and_covariances.keys())}')
+
+    return _intialise_means_and_covariances[method](hist, n_components)
 
 def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_edge, pt_high_edge):
     '''
@@ -49,33 +135,3 @@ def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_
     }
 
     return frame, fit_results
-
-def create_graph(df, x: str, y: str, ex, ey, name:str='', title:str='') -> TGraphErrors:
-        '''
-            Create a TGraphErrors from the input DataFrame
-
-            Parameters
-            ----------
-            x (str): x-axis variable
-            y (str): y-axis variable
-            ex (str): x-axis error
-            ey (str): y-axis error
-        '''
-
-        # eliminate None values on x, y
-        #df = df.filter(df[x].is_not_null())
-        #df = df.filter(df[y].is_not_null())
-
-        if len(df) == 0:
-            return TGraphErrors()
-        graph = TGraphErrors(len(df[x]))
-        for irow, row in df.iterrows():
-            graph.SetPoint(irow, row[x], row[y])
-            xerr = row[ex] if ex != 0 else 0.
-            yerr = row[ey] if ey != 0 else 0.
-            graph.SetPointError(irow, xerr, yerr)
-        
-        graph.SetName(name)
-        graph.SetTitle(title)
-
-        return graph
