@@ -174,3 +174,5 @@ cython_debug/
 *.root
 *.pdf
 *.csv
+*.npz
+*.pth
