@@ -1,0 +1,9 @@
+{
+  "data_fraction": 0.3,
+  "balance_classes": true,
+  "min_hits_required": 5,
+  "max_p_required": 10.0,
+  "add_pt": true,
+  "add_shower_shape": true,
+  "add_layer_ratios": true
+}
