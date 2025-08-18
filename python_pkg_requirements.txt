@@ -8,6 +8,7 @@ git+https://github.com/hipe4ml/hipe4ml@dev
 optuna
 particle
 scikit-learn
+seaborn
 shap
 torch
 torchic
