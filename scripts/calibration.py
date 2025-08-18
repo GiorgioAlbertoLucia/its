@@ -8,7 +8,8 @@ from ROOT import TFile, TF1, TCanvas
 from ROOT import RooRealVar, RooCrystalBall, RooGaussian, RooAddPdf
 
 from torchic import Dataset, AxisSpec
-from torchic import RooGausExp
+from torchic.roopdf import RooGausExp
+from torchic.core.graph import create_graph
 from torchic.physics.ITS import average_cluster_size, expected_cluster_size, sigma_its
 
 from particle import Particle
@@ -16,44 +17,103 @@ from particle import Particle
 import sys
 sys.path.append('..')
 from utils.pid_routine import average_cluster_size_with_mean, PARTICLE_ID, PDG_CODE
-from utils.particles import ParticleMasses
-from utils.utils import create_graph, calibration_fit_slice
+from utils.utils import calibration_fit_slice, initialize_means_and_covariances
 
 CONF = {
-    'Pi': {
-        'bg_min': 1.5,
-        'bg_max': 4,
+    'beta_gamma': {
+        'x_min': 0,
+        'x_max': 5,
+
+        'Pi': {
+            'x_min_fit': 1.5,
+            'x_max_fit': 5,
+            'x_nbins': 50,
+        },
+        'Ka': {
+            'x_min_fit': 0.7,
+            'x_max_fit': 4,
+            'x_nbins': 50,
+        },
+        'Pr': {
+            'x_min_fit': 0.5,
+            'x_max_fit': 4.5,
+            'x_nbins': 50,
+        },
+        'De': {
+            'x_min_fit': 0.4,
+            'x_max_fit': 3.5,
+            'x_nbins': 50,
+        },
+        'He': {
+            'x_min_fit': 0.7,
+            'x_max_fit': 2.5,
+            'x_max_bkg': 2.6,
+            'x_nbins': 50,
+        }
     },
-    'Ka': {
-        'bg_min': 0.7,
-        'bg_max': 4,
-    },
-    'Pr': {
-        'bg_min': 0.5,
-        'bg_max': 3.5,
-    },
-    'De': {
-        'bg_min': 0.45,
-        'bg_max': 1.5,
-    },
-    'He': {
-        'bg_min': 0.7,
-        'bg_max': 3.5,
+    'p': {
+        'x_min': 0,
+        'x_max': 6,
+
+        'Pi': {
+            'x_min_fit': 0,
+            'x_max_fit': 1.3,
+            'x_nbins': 120
+        },
+        'Ka': {
+            'x_min_fit': 0,
+            'x_max_fit': 3,
+            'x_nbins': 60
+        },
+        'Pr': {
+            'x_min_fit': 0.,
+            'x_max_fit': 4.,
+            'x_nbins': 60
+        },
+        'De': {
+            'x_min_fit': 0.,
+            'x_max_fit': 6,
+            'x_nbins': 60
+        },
+        'He': {
+            'x_min_fit': 1.7,
+            'x_max_fit': 5.9,
+            'x_max_bkg': 6,
+            'x_nbins': 60
+        }
     }
 }
 
-def prepare_dataset(dataset: Dataset, particle: str):
+DATASET_COLUMN_NAMES = {
+    'P':'fP',
+    'Pt':'fPt',
+    'Eta':'fEta',
+    'Phi':'fPhi',
+    'TofNSigma':'fTofNSigma',
+    'Chi2TPC':'fChi2TPC',
+    'PIDtracking': 'fPIDinTrk',
+    'ItsClusterSize':'fItsClusterSize',
+}
 
-    dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'])
+def prepare_dataset(dataset: Dataset, particle: str, mode: str = 'truncated'):
+
+    dataset['fItsClusterSize'] = np.array(dataset['fItsClusterSize'], np.uint64)
+    dataset['fAvgClSizeCosLam'], dataset['fNHitsIts'] = np.zeros(dataset.shape[0], dtype=float), np.zeros(dataset.shape[0], dtype=int)
+    if mode == 'truncated':
+        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'])
+    elif mode == 'mean':
+        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size_with_mean(dataset['fItsClusterSize'])
+
     dataset.query('fNHitsIts > 5', inplace=True)
     dataset['fAvgClSizeCosLam'] = dataset['fAvgClusterSize'] / np.cosh(dataset['fEta'])
     dataset['fBetaGamma'] = abs(dataset['fP']) / (Particle.from_pdgid(PDG_CODE[particle]).mass / 1_000)
+    dataset['fP'] = np.abs(dataset['fP'])
 
 def init_signal_roofit(clsize: RooRealVar, function: str = 'crystalball'):
 
     if function == 'crystalball':
         signal_pars = {
-            'mean': RooRealVar('mean', 'mean', 2., 15, ''),
+            'mean': RooRealVar('mean', 'mean', 1., 15, ''),
             'sigma': RooRealVar('sigma', 'sigma', 0.01, 10, ''),
             'aL': RooRealVar('aL', 'aL', 0.7, 30.),
             'nL': RooRealVar('nL', 'nL', 0.3, 30.),
@@ -68,50 +128,81 @@ def init_signal_roofit(clsize: RooRealVar, function: str = 'crystalball'):
     
     elif function == 'gausexp':
         signal_pars = {
-            'mean': RooRealVar('mean', 'mean', 2., 15, ''),
+            'mean': RooRealVar('mean', 'mean', 1., 15, ''),
             'sigma': RooRealVar('sigma', 'sigma', 0.01, 10, ''),
-            'rlife': RooRealVar('rlife', 'rlife', 0., 10.),
+            'rlife': RooRealVar('rlife', 'rlife', 2., 0., 10.),
         }
-        signal = RooGausExp('signal', 'signal', clsize, *signal_pars)
+        signal = RooGausExp('signal', 'signal', clsize, *signal_pars.values())
         return signal, signal_pars
     
     elif function == 'gaus':
         signal_pars = {
-            'mean': RooRealVar('mean', 'mean', 2., 15, ''),
+            'mean': RooRealVar('mean', 'mean', 1., 15, ''),
             'sigma': RooRealVar('sigma', 'sigma', 0.01, 10, ''),
         }
-        signal = RooGaussian('signal', 'signal', clsize, *signal_pars)
+        signal = RooGaussian('signal', 'signal', clsize, *signal_pars.values())
         return signal, signal_pars
     
     else:
         raise ValueError(f'Unknown function: {function}. Supported functions are "crystalball" and "gausexp".')
 
-def init_background_roofit(clsize: RooRealVar, particle: str):
+def init_background_roofit(clsize: RooRealVar, particle: str, function: str = 'gaus'):
 
-    bkg_pars = {
-        'bkg_mean': RooRealVar('bkg_mean', 'bkg_mean', 0., 1, ''),
-        'bkg_sigma': RooRealVar('bkg_sigma', 'bkg_sigma', 0.1, 0.8, ''),
-        #'rlife': RooRealVar('rlife', 'rlife', 0., 10.),
+    if function == 'gausexp':
+        bkg_pars = {
+            'mean': RooRealVar('bkg_mean', 'bkg_mean', 0., 1, ''),
+            'sigma': RooRealVar('bkg_sigma', 'bkg_sigma', 0.1, 0.8, ''),
+            'rlife': RooRealVar('bkg_rlife', 'rlife', 2., 0., 10.),
+        }
+        if particle == 'He':
+            bkg_pars['mean'] = RooRealVar('bkg_mean', 'bkg_mean', 0., 3, '')
+        bkg = RooGausExp('bkg', 'bkg', clsize, *bkg_pars.values())
+        return bkg, bkg_pars
+    elif function == 'gaus':
+        bkg_pars = {
+            'mean': RooRealVar('bkg_mean', 'bkg_mean', 0., 1, ''),
+            'sigma': RooRealVar('bkg_sigma', 'bkg_sigma', 0.1, 0.8, ''),
+            #'rlife': RooRealVar('rlife', 'rlife', 0., 10.),
+        }
+        if particle == 'He':
+            bkg_pars['mean'] = RooRealVar('bkg_mean', 'bkg_mean', 0., 3, '')
+        bkg = RooGaussian('bkg', 'bkg', clsize, bkg_pars['mean'], bkg_pars['sigma'])
+
+        return bkg, bkg_pars
+    else:
+        raise ValueError(f'Unknown function: {function}. Supported functions are "gausexp" and "gaus".')
+
+
+X_DICT = {
+    'beta_gamma': {
+        'axis_name': 'bg',
+        'axis_title': '#beta#gamma',
+        'var_name': 'fBetaGamma',
+    },
+    'p': {
+        'axis_name': 'p',
+        'axis_title': '#it{p} (GeV/c)',
+        'var_name': 'fP',
     }
-    if particle == 'He':
-        bkg_pars['bkg_mean'] = RooRealVar('bkg_mean', 'bkg_mean', 0., 3, '')
-    bkg = RooGaussian('bkg', 'bkg', clsize, bkg_pars['bkg_mean'], bkg_pars['bkg_sigma'])
+}
 
-    return bkg, bkg_pars
+def visualize_fit_results(dataset, fit_results_df, particle, bg_min, bg_max, particle_dir, params_file_path, x:str):
 
-def visualize_fit_results(fit_results_df, particle, bg_min, bg_max, particle_dir, params_file_path):
-
-    g_mean = create_graph(fit_results_df, 'bg', 'mean', 'bg_error', 'mean_err', 
-                                f'g_mean', ';#beta#gamma;#LT ITS Cluster Size #GT #times cos #LT #lambda #GT')
+    x_dict = X_DICT[x]
+    g_mean = create_graph(fit_results_df, 'x', 'mean', 'x_error', 'mean_err', 
+                                f'g_mean', f';{x_dict["axis_title"]};#LT ITS Cluster Size #GT #times cos #LT #lambda #GT')
     f_mean = TF1('simil_bethe_bloch_func', '[0]/x^[1] + [2]', bg_min, bg_max)
-    f_mean.SetParameters(2.6, 2., 5.5)
+    f_mean.SetParameters(2.6, 3.6, 2)
+    f_mean.SetParLimits(0, 0, 3)
+    if particle == 'He':
+        f_mean.SetParameters(2.3, 1.7, 4.5)
     g_mean.Fit(f_mean, 'RMS+')
     c_mean = TCanvas('c_mean', 'c_mean', 800, 600)
     g_mean.Draw('ap')
     f_mean.Draw('same')
 
-    g_resolution = create_graph(fit_results_df, 'bg', 'resolution', 'bg_error', 'resolution_err', 
-                                f'g_resolution', ';#beta#gamma;#sigma / #mu')
+    g_resolution = create_graph(fit_results_df, 'x', 'resolution', 'x_error', 'resolution_err', 
+                                f'g_resolution', f';{x_dict["axis_title"]};#sigma / #mu')
     f_resolution = TF1('resolution_fit', '[0]*ROOT::Math::erf((x - [1])/[2])', bg_min, bg_max)
     f_resolution.SetParameters(0.24, -0.32, 1.53)
     if particle == 'He':    
@@ -131,8 +222,8 @@ def visualize_fit_results(fit_results_df, particle, bg_min, bg_max, particle_dir
     else:                   dataset['fSigmaITS'] = sigma_its(dataset['fBetaGamma'], pid_params)
     dataset['fNSigmaITS'] = (dataset['fAvgClSizeCosLam'] - dataset['fExpClSizeCosLam']) / dataset['fSigmaITS']
 
-    axis_spec_bg = AxisSpec(50, 0, 5, 'bg', ';;')
-    axis_spec_nsigma = AxisSpec(100, -5, 5, 'nsigma', ';#beta#gamma;n#sigma_{ITS}')
+    axis_spec_bg = AxisSpec(50, 0, 5, x_dict['axis_name'], ';;')
+    axis_spec_nsigma = AxisSpec(100, -5, 5, 'nsigma', f';{x_dict["axis_title"]};n#sigma_{{ITS}}')
     h2_nsigma = dataset.build_th2('fBetaGamma', 'fNSigmaITS', axis_spec_bg, axis_spec_nsigma)
 
     particle_dir.cd()
@@ -149,76 +240,92 @@ def visualize_fit_results(fit_results_df, particle, bg_min, bg_max, particle_dir
                                              'res2': pid_params[5],}])
     pid_params_df.to_csv(params_file_path, mode='a', float_format='%.3f', header=False)
 
-def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str, particle: str):
+def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str, particle: str, x: str = 'beta_gamma'): 
 
-    cfg = CONF[particle]
+    x_dict = X_DICT[x]
 
-    axis_spec_bg = AxisSpec(50, 0, 5, 'bg', ';;')
-    axis_spec_clsize = AxisSpec(30, 0, 15, 'cluster_size_cal', ';#beta#gamma;#LT ITS Cluster Size #GT #times cos #LT #lambda #GT')
+    cfg = CONF[x][particle]
 
-    h2_clsize = dataset.build_th2('fBetaGamma', 'fAvgClSizeCosLam', axis_spec_bg, axis_spec_clsize)
+    axis_spec_x = AxisSpec(cfg['x_nbins'], CONF[x]['x_min'], CONF[x]['x_max'], x_dict['axis_name'], ';;')
+    axis_spec_clsize = AxisSpec(60, 0, 15, 'cluster_size_cal', f';{x_dict["axis_title"]};#LT ITS Cluster Size #GT #times cos #LT #lambda #GT')
+
+    h2_clsize = dataset.build_th2(x_dict['var_name'], 'fAvgClSizeCosLam', axis_spec_x, axis_spec_clsize)
 
     # RooFit initialization
     clsize = RooRealVar('fClSizeCosLam', '#LT Cluster size #GT #LT cos#lambda #GT', 0., 15.)
     signal, signal_pars = init_signal_roofit(clsize, function='gausexp')
-    bkg, bkg_pars = init_background_roofit(clsize, particle)
+    bkg, bkg_pars = init_background_roofit(clsize, particle, function='gausexp')
 
-    bg_min = cfg['bg_min']
-    bg_max = cfg['bg_max']
+    x_min = cfg['x_min_fit']
+    x_max = cfg['x_max_fit']
 
     fit_results_df = None
 
-    bg_bin_min = h2_clsize.GetXaxis().FindBin(bg_min)
-    bg_bin_max = h2_clsize.GetXaxis().FindBin(bg_max)
-    for bg_bin in range(bg_bin_min, bg_bin_max+1):
+    x_bin_min = h2_clsize.GetXaxis().FindBin(x_min)
+    x_bin_max = h2_clsize.GetXaxis().FindBin(x_max)
+    for x_bin in range(x_bin_min, x_bin_max+1):
         
-        bg = h2_clsize.GetXaxis().GetBinCenter(bg_bin)
-        bg_error = h2_clsize.GetXaxis().GetBinWidth(bg_bin) / 2.
-        bg_low_edge = h2_clsize.GetXaxis().GetBinLowEdge(bg_bin)
-        bg_high_edge = h2_clsize.GetXaxis().GetBinLowEdge(bg_bin+1)
+        ix = h2_clsize.GetXaxis().GetBinCenter(x_bin)
+        x_error = h2_clsize.GetXaxis().GetBinWidth(x_bin) / 2.
+        x_low_edge = h2_clsize.GetXaxis().GetBinLowEdge(x_bin)
+        x_high_edge = h2_clsize.GetXaxis().GetBinLowEdge(x_bin+1)
         
+        h_clsize = h2_clsize.ProjectionY(f'clsize_{ix:.2f}', x_bin, x_bin, 'e')
+        if h_clsize.GetEntries() <= 0:
+            print(f'No entries for particle {particle}, {x_dict["axis_name"]} = {ix:.2f}, skipping...')
+            continue
+
         model = None
-        if (particle == 'He' and bg < 2.5):
+        if (particle == 'He' and ix < cfg.get('x_max_bkg', 0)):
             sig_frac = RooRealVar('sig_frac', 'sig_frac', 0.5, 0., 1.)
             model = RooAddPdf('model', 'signal + bkg', [signal, bkg], [sig_frac])
+
+            if h_clsize.GetEntries() > 30:
+                means, covariances = initialize_means_and_covariances(h_clsize, 2)
+                mean_sig, sigma_sig = (means[1], np.sqrt(covariances[1]))
+                mean_bkg, sigma_bkg = (means[0], np.sqrt(covariances[0]))
+
+                signal_pars['mean'].setVal(mean_sig)
+                signal_pars['sigma'].setVal(sigma_sig)
+                bkg_pars['mean'].setVal(mean_bkg)
+                bkg_pars['sigma'].setVal(sigma_bkg)
+
         else:
             model = signal
+            if h_clsize.GetEntries() > 30:
+                means, sigmas = initialize_means_and_covariances(h_clsize, 1)
+                signal_pars['mean'].setVal(means[0])
+                signal_pars['sigma'].setVal(np.sqrt(sigmas[0]))
 
-        h_clsize = h2_clsize.ProjectionY(f'clsize_{bg:.2f}', bg_bin, bg_bin, 'e')
-        frame, fit_results = calibration_fit_slice(model, h_clsize, clsize, signal_pars, bg_low_edge, bg_high_edge)
-        fit_results['bg'] = np.abs(bg)
-        fit_results['bg_error'] = bg_error
+        frame, fit_results = calibration_fit_slice(model, h_clsize, clsize, signal_pars, x_low_edge, x_high_edge)
+        fit_results['x'] = np.abs(ix)
+        fit_results['x_error'] = x_error
         if fit_results_df is None:
             fit_results_df = pd.DataFrame.from_dict([fit_results])
         else:
             fit_results_df = pd.concat([fit_results_df, pd.DataFrame.from_dict([fit_results])], ignore_index=True)
 
-        canvas = TCanvas(f'cClSizeCosLam_{bg:.2f}', f'cClSizeCosLam_{bg:.2f}', 800, 600)
+        canvas = TCanvas(f'cClSizeCosLam_{ix:.2f}', f'cClSizeCosLam_{ix:.2f}', 800, 600)
         frame.Draw()
         outfile.cd()
         canvas.Write()
 
-    visualize_fit_results(fit_results_df, particle, bg_min, bg_max, outfile, params_file_path)
+    if fit_results_df is None:
+        print(f'No fit results for particle {particle}, skipping...')
+        return
+    visualize_fit_results(dataset, fit_results_df, particle, x_min, x_max, outfile, params_file_path, x)
 
     outfile.cd()
     h2_clsize.Write()
 
     del h2_clsize, clsize, signal, signal_pars, bkg, bkg_pars
 
+def main_routine(dataset: Dataset, mode: str, x: str):
 
-if __name__ == '__main__':
-
-    #infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC22o_pass7_minBias_small.root'
-    #infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC24f3c.root'
-    infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC25a3.root'
-
-    folder_name = 'DF*'
-    dataset = Dataset.from_root(infile_path, tree_name='O2clsttablemc', folder_name='DF*', columns=['fP', 'fEta', 'fPhi', 'fItsClusterSize', 'fPartID', 'fPartIDMc', 'fIsPositive'])
-
-    outfile_path = f'/Users/glucia/Projects/ALICE/its/output/MC/LHC25a3_calibration.root'
+    outfile_path = f'/home/galucia/its/output/data/LHC24_pass1_skimmed_calibration_{x}_{mode}.root'
     outfile = TFile(outfile_path, 'RECREATE')
     
-    params_file_path = f'/Users/glucia/Projects/ALICE/its/output/MC/LHC25a3_calibration.csv'
+    params_file_path = f'/home/galucia/its/output/data/LHC24_pass1_skimmed_calibration_{x}_{mode}.csv'
     pid_params_df = pd.DataFrame.from_dict([{'particle': '-',
                                              'kp0': '-',
                                              'kp1': '-',
@@ -232,13 +339,37 @@ if __name__ == '__main__':
     for particle in particles:
         
         tmp_dataset = dataset.query(f'fPartID == {PARTICLE_ID[particle]}', inplace=False)
-        tmp_dataset.query(f'abs(fPartIDMc) == {PDG_CODE[particle]}', inplace=True)
+        #tmp_dataset.query(f'abs(fPartIDMc) == {PDG_CODE[particle]}', inplace=True)
         if particle == 'He':
             tmp_dataset['fP'] = tmp_dataset['fP'] * 2
         
-        prepare_dataset(tmp_dataset, particle)
+        prepare_dataset(tmp_dataset, particle, mode=mode)
         particle_dir = outfile.mkdir(particle)
-        calibration_routine(tmp_dataset, particle_dir, params_file_path, particle)
+        calibration_routine(tmp_dataset, particle_dir, params_file_path, particle, x)
         del tmp_dataset
 
     outfile.Close()
+
+
+if __name__ == '__main__':
+
+    #infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC22o_pass7_minBias_small.root'
+    #infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC24f3c.root'
+    #infile_path = '/Users/glucia/Projects/ALICE/data/its_pid/LHC25a3.root'
+    infile_path = '/data/galucia/its_pid/LHC24_pass1_skimmed/data_04_08_2025.root'
+
+    folder_name = 'DF*'
+    tree_names = ['O2clsttable', 'O2clsttableextra']
+    columns = ['fP', 'fEta', 'fPhi', 'fItsClusterSize', 'fPartID', 'fPTPC',
+               'fPIDinTrk', 'fTpcNSigma', 'fTofNSigma', 'fTofMass', 'fCosPAMother',
+               'fMassMother']
+    datasets = []
+    
+    for tree_name in tree_names:
+        datasets.append(Dataset.from_root(infile_path, tree_name=tree_name, folder_name=folder_name)) #, columns=columns))
+    dataset = datasets[0].concat(datasets[1], ignore_index=True)
+    print(f'{dataset.shape=}\n{dataset.columns=}')
+
+    for x in ['beta_gamma', 'p']:
+        for mode in ['truncated', 'mean']:
+            main_routine(dataset, mode=mode, x=x)
