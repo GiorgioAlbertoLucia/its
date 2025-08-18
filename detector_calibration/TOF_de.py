@@ -9,17 +9,19 @@ from ROOT import RooRealVar, RooCrystalBall, RooAddPdf, RooGaussian, RooExponent
 
 from particle import Particle
 
-from torchic import Dataset, AxisSpec, RooGausExp
+from torchic import Dataset, AxisSpec
+from torchic.roopdf import RooGausExp
 from torchic.physics import BetheBloch
 from torchic.core.graph import create_graph
 
-from calibration_utils import calibration_fit_slice, initialize_means_and_sigmas
 import sys
 sys.path.append('..')
 from utils.pid_routine import standard_selections, define_variables
+from utils.utils import calibration_fit_slice, initialize_means_and_covariances
 
 DATASET_COLUMN_NAMES = {
     'P': 'fP',
+    'TpcInnerParam': 'fTPCInnerParam',
     'Pt': 'fPt',
     'Eta': 'fEta',
     'TpcSignal': 'fTPCsignal',
@@ -27,6 +29,7 @@ DATASET_COLUMN_NAMES = {
     'TofBeta': 'fBeta',
     'Chi2TPC': 'fTPCchi2',
     'ItsClusterSize': 'fITSclusterSizes',
+    'Flags': 'fFlags',
 }
 
 PT_MIN = 0.7
@@ -113,7 +116,7 @@ def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
     g_resolution = create_graph(fit_results, 'pt', 'resolution', 'pt_err', 'resolution_err', 
                                 f'g_resolution_{sign}', ';#it{p}_{T} (GeV/#it{c});#sigma_{m_{TOF}} / #LT m_{TOF} #GT')
 
-    PT_RES, PT_MAX_RES = 0., 3
+    PT_RES, PT_MAX_RES = PT_MIN, 3.3
     f_resolution = TF1('f_resolution', '[0]', PT_RES, PT_MAX_RES)
     f_resolution.SetParameters(0.07)
     g_resolution.Fit(f_resolution, 'RMS+')
@@ -177,13 +180,14 @@ def TOF_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_C
             fit_results.append(ifit_result)
 
             canvas = TCanvas(f'TOFfit_{pt:.2f}', f'#it{{p}}_{{T}} = {pt:.2f} (GeV/#{{c}}^{{2}})', 800, 600)
-            iframe.Draw()
             text = TPaveText(0.65, 0.4, 0.88, 0.5, 'ndc')
             text.SetFillColor(0)
             text.SetBorderSize(0)
             text.AddText(f'#chi^{2} / NDF = {chi2:.2f}')
-            text.Draw()
 
+            canvas.cd()
+            iframe.Draw()
+            text.Draw()
 
             tof_dir.cd()
             canvas.Write()
@@ -237,8 +241,16 @@ if __name__ == '__main__':
     column_names = {key: value for key, value in DATASET_COLUMN_NAMES.items()}
     dataset = Dataset.from_root(infile_path, tree_name, folder_name, columns=[col for col in column_names.values()])
     
-    dataset[column_names['P']] = dataset[column_names['Pt']] * np.cosh(dataset[column_names['Eta']])
-    dataset[column_names['TofMass']] = np.abs(dataset[column_names['P']]) * np.sqrt(1 / (dataset[column_names['TofBeta']] ** 2) - 1)
+    #dataset[column_names['P']] = dataset[column_names['Pt']] * np.cosh(dataset[column_names['Eta']])
+    #dataset[column_names['TofMass']] = np.abs(dataset[column_names['P']]) * np.sqrt(1 / (dataset[column_names['TofBeta']] ** 2) - 1)
+
+    dataset[column_names['TofMass']] = np.abs(dataset[column_names['TpcInnerParam']]) * np.sqrt(1 / (dataset[column_names['TofBeta']] ** 2) - 1)
+    print(f'{dataset.columns=}')
+    readPidTracking = lambda x: (x >> 12) & 0x1F
+    readPidTracking_vectorized = np.vectorize(readPidTracking) 
+    dataset['fPidTracking'] = readPidTracking_vectorized(dataset['fFlags'])
+    print(f'{dataset['fPidTracking'].unique()=}')
+
     define_variables(dataset, DATASET_COLUMN_NAMES=DATASET_COLUMN_NAMES)
     standard_selections(dataset, particle='De', DATASET_COLUMN_NAMES=DATASET_COLUMN_NAMES)
     outfile = TFile('output/TOF_de.root', 'recreate')

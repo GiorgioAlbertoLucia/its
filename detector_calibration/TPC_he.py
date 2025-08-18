@@ -9,16 +9,17 @@ from ROOT import RooRealVar, RooCrystalBall, RooAddPdf, RooGaussian
 
 from particle import Particle
 
-from torchic import Dataset, AxisSpec, RooGausExp
+from torchic import Dataset, AxisSpec
+from torchic.roopdf import RooGausExp
 from torchic.physics import BetheBloch, py_BetheBloch
 
 from torchic.physics.ITS import expected_cluster_size, sigma_its, average_cluster_size
 from torchic.core.graph import create_graph
 
-from calibration_utils import calibration_fit_slice, initialize_means_and_sigmas
 import sys
 sys.path.append('..')
 from utils.pid_routine import standard_selections, define_variables
+from utils.utils import initialize_means_and_covariances, calibration_fit_slice
 
 DATASET_COLUMN_NAMES = {
     'P': 'fTPCInnerParam',
@@ -96,7 +97,7 @@ def init_background_roofit(nsigma_tpc: RooRealVar, function: str = 'gaus'):
 def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
 
     g_mean = create_graph(fit_results, 'bg', 'mean', 'bg_err', 'mean_err', 
-                            f'g_mean_{sign}', ';#beta#gamma;#LT #mathrm{d}E/#mathrm{d}x #GT (GeV/#it{c}^{2})')
+                            f'g_mean_{sign}', ';#beta#gamma;#LT #rm{d}E/#rm{d}x #GT (GeV/#it{c}^{2})')
     
     f_mean = TF1('f_mean', BetheBloch, BETAGAMMA_MIN, BETAGAMMA_MAX, 5)
     f_mean.SetParameters(-241.4902, 0.374245, 1.397847, 1.0782504, 2.048336)
@@ -104,7 +105,7 @@ def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
     fit_params = [f_mean.GetParameter(i) for i in range(5)]
     
     g_resolution = create_graph(fit_results, 'bg', 'resolution', 'bg_err', 'resolution_err', 
-                                f'g_resolution_{sign}', ';#beta#gamma;#sigma_{TPC} / #LT #mathrm{d}E/#mathrm{d}x #GT')
+                                f'g_resolution_{sign}', ';#beta#gamma;#sigma_{TPC} / #LT #rm{d}E/#rm{d}x #GT')
 
     BETAGAMMA_MIN_RES, BETAGAMMA_MAX_RES = 0.6, 3
     f_resolution = TF1('f_resolution', '[0]', BETAGAMMA_MIN_RES, BETAGAMMA_MAX_RES)
@@ -155,19 +156,16 @@ def TPC_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_C
                 sig_frac = RooRealVar('sig_frac', 'sig_frac', 0.5, 0., 1.)
                 model = RooAddPdf('model', 'model', [signal_pdf, bkg_pdf], [sig_frac])
                 
-                means, sigmas = initialize_means_and_sigmas(h_tpc, 2)
-                mean_sig, sigma_sig = (means[1][0], np.sqrt(float(sigmas[1]))) if means[1][0] > means[0][0] else (means[0][0], np.sqrt(float(sigmas[0])))
-                mean_bkg, sigma_bkg = (means[0][0], np.sqrt(float(sigmas[0]))) if means[1][0] > means[0][0] else (means[1][0], np.sqrt(float(sigmas[1])))
-
-                signal_pars['mean'].setVal(mean_sig)
-                signal_pars['sigma'].setVal(sigma_sig)
-                bkg_pars['mean'].setVal(mean_bkg)
-                bkg_pars['sigma'].setVal(sigma_bkg)
+                means, covariances = initialize_means_and_covariances(h_tpc, 2)
+                signal_pars['mean'].setVal(means[1])
+                signal_pars['sigma'].setVal(np.sqrt(covariances[1]))
+                bkg_pars['mean'].setVal(means[0])
+                bkg_pars['sigma'].setVal(np.sqrt(covariances[0]))
 
             else:
-                means, sigmas = initialize_means_and_sigmas(h_tpc, 1)
-                signal_pars['mean'].setVal(means[0][0])
-                signal_pars['sigma'].setVal(np.sqrt(float(sigmas[0])))
+                means, covariances = initialize_means_and_covariances(h_tpc, 1)
+                signal_pars['mean'].setVal(means[0])
+                signal_pars['sigma'].setVal(np.sqrt(covariances[0]))
                 model = signal_pdf
 
             iframe, ifit_result = calibration_fit_slice(model, h_tpc, tpc_signal, signal_pars, bg_low_edge, bg_high_edge)
@@ -193,7 +191,7 @@ def visualize_distributions_and_fit(dataset: Dataset, outfile: TFile, fit_params
     dataset['fNSigmaTPC'] = (dataset[column_names['TpcSignal']] - dataset['fExpTpcSignal']) / (dataset['fExpTpcSignal'] * resolution)
 
     axis_spec_betagamma = AxisSpec(160, -8, 8, 'beta_gamma', ';#beta#gamma;dE/dx (a.u.)')
-    axis_spec_tpcsignal = AxisSpec(100, 0, 1200, 'tpc_signal', ';#beta#gamma;#mathrm{d}E/#mathrm{d}x (a.u.)')
+    axis_spec_tpcsignal = AxisSpec(100, 0, 1200, 'tpc_signal', ';#beta#gamma;#rm{d}E/#rm{d}x (a.u.)')
     axis_spec_nsigmatpc = AxisSpec(100, -5, 5, 'nsigma_tpc', ';#beta#gamma;n#sigma_{TPC}')
     axis_spec_clsize = AxisSpec(90, 0, 15., 'cl_size', ';#beta#gamma;#LT ITS cluster size (a.u.)#GT #times #LT cos#lambda#GT')
 

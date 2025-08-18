@@ -9,14 +9,15 @@ from ROOT import RooRealVar, RooCrystalBall, RooAddPdf, RooGaussian
 
 from particle import Particle
 
-from torchic import Dataset, AxisSpec, RooGausExp
+from torchic import Dataset, AxisSpec
+from torchic.roopdf import RooGausExp
 from torchic.physics import BetheBloch, py_BetheBloch
 from torchic.core.graph import create_graph
 
-from calibration_utils import calibration_fit_slice, initialize_means_and_sigmas
 import sys
 sys.path.append('..')
 from utils.pid_routine import standard_selections, define_variables
+from utils.utils import calibration_fit_slice, initialize_means_and_covariances
 
 DATASET_COLUMN_NAMES = {
     'P': 'fTPCInnerParam',
@@ -116,7 +117,7 @@ def fit_parametrisation(fit_results: pd.DataFrame, sign: str, outfile: TFile):
 def TPC_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_COLUMN_NAMES):
 
     axis_spec_betagamma = AxisSpec(160, -8, 8, 'beta_gamma', ';#beta#gamma;dE/dx (a.u.)')
-    axis_spec_tpcsignal = AxisSpec(100, 0, 500, 'tpc_signal', ';#beta#gamma;dE/dx (a.u.)')
+    axis_spec_tpcsignal = AxisSpec(250, 0, 500, 'tpc_signal', ';#beta#gamma;dE/dx (a.u.)')
     h2_tpc = dataset.build_th2('fBetaGamma', column_names['TpcSignal'], axis_spec_betagamma, axis_spec_tpcsignal)
     
     tpc_signal = RooRealVar('fSignalTPC', 'dE/dx (a.u.)', 0., 500.)
@@ -140,16 +141,16 @@ def TPC_calibration(dataset: Dataset, outfile:TFile, column_names:dict=DATASET_C
         bg_step = h2_tpc.GetXaxis().GetBinWidth(1)
 
         for bg_bin in range(bg_bin_min, bg_bin_max):
-            
+
             bg = h2_tpc.GetXaxis().GetBinCenter(bg_bin)
             bg_low_edge = h2_tpc.GetXaxis().GetBinLowEdge(bg_bin)
             bg_high_edge = h2_tpc.GetXaxis().GetBinLowEdge(bg_bin+1)
             
             h_tpc = h2_tpc.ProjectionY(f'tpc_signal_{bg:.2f}', bg_bin, bg_bin, 'e')
             
-            means, sigmas = initialize_means_and_sigmas(h_tpc, 1)
-            signal_pars['mean'].setVal(means[0][0])
-            signal_pars['sigma'].setVal(np.sqrt(float(sigmas[0])))
+            means, sigmas = initialize_means_and_covariances(h_tpc, 1, method='kmeans')
+            signal_pars['mean'].setVal(means[0])
+            signal_pars['sigma'].setVal(np.sqrt(sigmas[0]))
             model = signal_pdf
 
             iframe, ifit_result = calibration_fit_slice(model, h_tpc, tpc_signal, signal_pars, bg_low_edge, bg_high_edge)
@@ -175,7 +176,7 @@ def visualize_distributions_and_fit(dataset: Dataset, outfile: TFile, fit_params
     dataset['fNSigmaTPC'] = (dataset[column_names['TpcSignal']] - dataset['fExpTpcSignal']) / (dataset['fExpTpcSignal'] * resolution)
 
     axis_spec_betagamma = AxisSpec(160, -8, 8, 'beta_gamma', ';#beta#gamma;dE/dx (a.u.)')
-    axis_spec_tpcsignal = AxisSpec(100, 0, 500, 'tpc_signal', ';#beta#gamma;#mathrm{d}E/#mathrm{d}x (a.u.)')
+    axis_spec_tpcsignal = AxisSpec(250, 0, 500, 'tpc_signal', ';#beta#gamma;#mathrm{d}E/#mathrm{d}x (a.u.)')
     axis_spec_nsigmatpc = AxisSpec(100, -5, 5, 'nsigma_tpc', ';#beta#gamma;n#sigma_{TPC}')
     axis_spec_clsize = AxisSpec(90, 0, 15., 'cl_size', ';#beta#gamma;#LT ITS cluster size (a.u.)#GT #times #LT cos#lambda#GT')
 

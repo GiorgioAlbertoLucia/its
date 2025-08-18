@@ -45,53 +45,71 @@ def average_cluster_size_with_mean(cluster_sizes):
     
     avg_cluster_size /= n_hits
 
-    return avg_cluster_size
+    return avg_cluster_size, n_hits
 
 def define_variables(dataset: Dataset, **kwargs):
 
     cols = kwargs.get('DATASET_COLUMN_NAMES', PID_ROUTINE_DATASET_COLUMN_NAMES)
 
     dataset['fAvgClSize'], dataset['fNHitsIts'] = average_cluster_size(dataset[cols['ItsClusterSize']])
-    dataset['fClSizeCosLam'] = dataset['fAvgClSize'] / np.cosh(dataset[cols['Eta']])
+    dataset['fAvgClSizeCosLam'] = dataset['fAvgClSize'] / np.cosh(dataset[cols['Eta']])
     
-    dataset['fAvgClSizeMean'] = average_cluster_size_with_mean(dataset[cols['ItsClusterSize']])
+    dataset['fAvgClSizeMean'], dataset['fNHitsItsMean'] = average_cluster_size_with_mean(dataset[cols['ItsClusterSize']])
     dataset['fAvgClSizeCosLamMean'] = dataset['fAvgClSizeMean'] / np.cosh(dataset[cols['Eta']])
 
-    dataset[cols['Pt']] = dataset[cols['P']] / np.cosh(dataset[cols['Eta']])
+    if cols['Pt'] not in dataset.columns:  
+        dataset[cols['Pt']] = dataset[cols['P']] / np.cosh(dataset[cols['Eta']])
 
 def visualize_dataset(dataset: Dataset, outfile):
 
-    axis_spec_pt = AxisSpec(100, 0., 10., '', ';#it{p}_{T} (GeV/#it{c});#LT ITS cluster size #GT #LT cos#lambda #GT')
+    axis_spec_pt = AxisSpec(100, -10., 10., '', ';#it{p}_{T} (GeV/#it{c});#LT ITS cluster size #GT #LT cos#lambda #GT')
     axis_spec_cl = AxisSpec(90, 0., 15., '', ';#it{p}_{T} (GeV/#it{c});#LT ITS cluster size #GT #LT cos#lambda #GT')
     axis_spec_nsigma_tpc = AxisSpec(100, -10., 10., 'nsigma_tpc', ';#it{p}_{T} (GeV/#it{c});TPC #sigma')
     axis_spec_nsigma_tof = AxisSpec(100, -10., 10., 'nsigma_tof', ';#it{p}_{T} (GeV/#it{c});TOF #sigma')
     axis_spec_tof_mass = AxisSpec(100, 0., 10., 'tof_mass', ';#it{p}_{T} (GeV/#it{c});TOF mass (GeV/#it{c}^{2})')
 
-    h2_pt_clsize = dataset.build_th2('fPt', 'fClSizeCosLam', axis_spec_pt, axis_spec_cl)
-    h2_pt_clsize_nsigma_tpc = dataset.build_th2('fPt', 'fTpcNSigma', axis_spec_pt, axis_spec_nsigma_tpc)
-    h2_pt_clsize_nsigma_tof = dataset.build_th2('fPt', 'fTofNSigma', axis_spec_pt, axis_spec_nsigma_tof)
-    h2_pt_clsize_tof_mass = dataset.build_th2('fPt', 'fTofMass', axis_spec_pt, axis_spec_tof_mass)
+    h2_pt_clsize = dataset.build_th2('fPt', 'fAvgClSizeCosLam', axis_spec_pt, axis_spec_cl)
+    h2_pt_nsigma_tpc = dataset.build_th2('fPt', 'fTpcNSigma', axis_spec_pt, axis_spec_nsigma_tpc)
+    h2_pt_nsigma_tof = dataset.build_th2('fPt', 'fTofNSigma', axis_spec_pt, axis_spec_nsigma_tof)
+    h2_pt_tof_mass = dataset.build_th2('fPt', 'fTofMass', axis_spec_pt, axis_spec_tof_mass)
     
     outfile.cd()
     h2_pt_clsize.Write('h2PtClSizeCosLam')
-    h2_pt_clsize_nsigma_tpc.Write('h2PtClSizeCosLamNSigmaTPC')
-    h2_pt_clsize_nsigma_tof.Write('h2PtClSizeCosLamNSigmaTOF')
-    h2_pt_clsize_tof_mass.Write('h2PtClSizeCosLamTOFMass')
+    h2_pt_nsigma_tpc.Write('h2PtNSigmaTPC')
+    h2_pt_nsigma_tof.Write('h2PtNSigmaTOF')
+    h2_pt_tof_mass.Write('h2PtTOFMass')
+
+def standard_selections_pi(dataset: Dataset, **kwargs):
+    pass
+
+def standard_selections_ka(dataset: Dataset, **kwargs):
+    pass
+
+def standard_selections_pr(dataset: Dataset, **kwargs):
+    pass
 
 def standard_selections_de(dataset: Dataset, **kwargs):
 
     cols = kwargs.get('DATASET_COLUMN_NAMES', PID_ROUTINE_DATASET_COLUMN_NAMES)
 
-    dataset.query(f'0.5 < {cols["Chi2TPC"]} < 4', inplace=True)
+    if cols['Chi2TPC'] in dataset.columns:
+        dataset.query(f'0.5 < {cols["Chi2TPC"]} < 4', inplace=True)
+    if 'fTofNSigma' in dataset.columns:
+        dataset.query(f'abs(fTofNSigma) < 1', inplace=True)
 
 def standard_selections_he(dataset: Dataset, **kwargs):
 
     cols = kwargs.get('DATASET_COLUMN_NAMES', PID_ROUTINE_DATASET_COLUMN_NAMES)
 
-    dataset.query(f'0.5 < {cols["Chi2TPC"]} < 4', inplace=True)
-    dataset.query('fClSizeCosLam > 4', inplace=True)
+    if cols['Chi2TPC'] in dataset.columns:
+        dataset.query(f'0.5 < {cols["Chi2TPC"]} < 4', inplace=True)
+    if 'fClSizeCosLam' in dataset.columns:
+        dataset.query('fClSizeCosLam > 4', inplace=True)
 
 SELECTION_FUNCTIONS_DICT = {
+    'Pi': standard_selections_pi,
+    'Ka': standard_selections_ka,
+    'Pr': standard_selections_pr,
     'De': standard_selections_de,
     'He': standard_selections_he,
 }
