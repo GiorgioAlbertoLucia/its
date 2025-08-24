@@ -18,6 +18,7 @@ from torchic.physics.ITS import unpack_cluster_sizes, average_cluster_size
 import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from core.bdt.momentum_aware_bdt import MomentumAwareBDT
+from core.bdt.regime_specific_bdt_ensemble import RegimeSpecificBDTEnsemble
 from core.bdt.bdt_routine import BDTRoutine, BDTConfig, plot_momentum_performance
 from core.ml_common import add_physics_features, get_feature_columns, calculate_class_weights
 from utils.pid_routine import PARTICLE_ID
@@ -46,7 +47,7 @@ def load_data(data_config: DataConfig) -> Dataset:
         columns=['fP', 'fEta', 'fPhi', 'fItsClusterSize', 'fPartID']),
         axis=1
     )
-    
+
     logger.info("Unpacking cluster sizes...")
     np_unpack_cluster_sizes = np.vectorize(unpack_cluster_sizes)
     for layer in range(7):
@@ -59,7 +60,7 @@ def load_data(data_config: DataConfig) -> Dataset:
     dataset['fClSizeCosL'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'])
     dataset['fMeanItsClSize'] = dataset['fClSizeCosL'] / dataset['fCosL']
     
-    dataset.query(f'fNHitsIts == {data_config.min_hits_required}', inplace=True)
+    dataset.query(f'fNHitsIts >= {data_config.min_hits_required}', inplace=True)
     dataset.query(f'fPAbs < {data_config.max_p_required}', inplace=True)
     logger.info(f"Filtered to tracks with {data_config.min_hits_required} hits: {len(dataset)} samples")
     
@@ -103,7 +104,7 @@ def prepare_data(df: pd.DataFrame, data_config: DataConfig, train_config: BDTCon
      -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, LabelEncoder, Dict, List[str]]:
     """Prepare data for training with feature engineering and scaling."""
     logger = setup_logging()
-    
+
     if data_config.data_fraction < 1.0:
         df = df.sample(frac=data_config.data_fraction, random_state=42)
         logger.info(f"Sampled {data_config.data_fraction*100}% of data: {len(df)} samples")
@@ -129,6 +130,7 @@ def prepare_data(df: pd.DataFrame, data_config: DataConfig, train_config: BDTCon
     logger.info(f"Using {len(feature_columns)} features: {feature_columns}")
     X = df[feature_columns].values.astype(np.float32)
     
+    print(f'particles:{df["fPartID"].unique()}')
     label_encoder = LabelEncoder()
     y = label_encoder.fit_transform(df['fPartID'].values)
     
@@ -137,9 +139,19 @@ def prepare_data(df: pd.DataFrame, data_config: DataConfig, train_config: BDTCon
     class_weights = calculate_class_weights(y)
     logger.info(f"Class weights: {class_weights}")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=data_config.test_size, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=train_config.test_size, random_state=42)
     
     return X_train, y_train, X_test, y_test, label_encoder, class_weights, feature_columns
+
+def init_model(model_selection: str):
+
+    if model_selection == "momentum_aware":
+        return MomentumAwareBDT(momentum_feature_idx=0)
+    elif model_selection == "regime_specific":
+        momentum_bins = [0.1, 0.3, 0.5, 0.9, 1.1, 1.3, 
+                          1.5, 2.0, 3.0, 5.0, 10.0]
+        return RegimeSpecificBDTEnsemble(momentum_bins=momentum_bins,
+                                         momentum_feature_idx=0)
 
 def main():
     """Example of how to use the BDT following NN patterns."""
@@ -154,15 +166,18 @@ def main():
     
     X_train, y_train, X_test, y_test, label_encoder, class_weights, feature_columns = prepare_data(df, data_config, train_config)
     
-    bdt_model = MomentumAwareBDT(momentum_feature_idx=0)
+    #model_selection = "regime_specific"
+    model_selection = "momentum_aware"
+    bdt_model = init_model(model_selection=model_selection)
     
     bdt_routine = BDTRoutine(bdt_model, class_weights)
     training_history = bdt_routine.run_training_loop(X_train, y_train, val_size=0.2)
     scores, momentum = bdt_model.get_model_scores(X_test)
     
-    output_file = TFile("../output/bdt/test_results.root", "RECREATE")
+    output_file = TFile(f"../output/bdt/test_results_{model_selection}.root", "RECREATE")
     class_names = ['Pi', 'Ka', 'Pr', 'De', 'He']
-    bdt_routine.plot_model_scores(X_test, class_names, output_file)
+    bdt_routine.plot_model_scores(X_test, y_test, class_names, output_file)
+    #bdt_routine.analyze_feature_importance_shap(X_test, y_test, feature_columns, label_encoder.classes_, output_file)
     output_file.Close()
     
     plot_momentum_performance(bdt_model, X_test, y_test)

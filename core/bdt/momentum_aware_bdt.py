@@ -36,7 +36,7 @@ class MomentumAwareBDT:
                 'objective': 'multi:softprob',
                 'eval_metric': 'mlogloss',
                 'max_depth': 6,
-                'learning_rate': 0.1,
+                'learning_rate': 0.3,
                 'n_estimators': 300,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
@@ -44,8 +44,10 @@ class MomentumAwareBDT:
                 'reg_alpha': 0.1,
                 'reg_lambda': 1.0,
                 'random_state': 42,
-                'n_jobs': -1,
-                'verbosity': 0
+                'n_jobs': 1,
+                'nthread': 1,
+                'verbosity': 0,
+                'early_stopping_rounds': 20,
             }
         else:
             self.xgb_params = xgb_params
@@ -99,6 +101,7 @@ class MomentumAwareBDT:
         Returns training history similar to neural network.
         """
         self.classes_ = np.unique(y)
+        n_classes = len(self.classes_)
         
         X_enhanced = self._create_momentum_features(X)
         X_train, X_val, y_train, y_val = train_test_split(
@@ -113,22 +116,18 @@ class MomentumAwareBDT:
                 sample_weight, test_size=val_size, random_state=42, stratify=y
             )
         
-        self.model = xgb.XGBClassifier(**self.xgb_params)
-        
-        eval_result = {}
+        self.model = xgb.XGBClassifier(**self.xgb_params, num_class=n_classes)
         self.model.fit(
             X_train, y_train,
             sample_weight=sample_weight_train,
             eval_set=[(X_train, y_train), (X_val, y_val)],
-            eval_names=['train', 'val'],
-            early_stopping_rounds=20,
             verbose=False,
             callbacks=[xgb.callback.EvaluationMonitor(show_stdv=False)]
         )
         
         evals_result = self.model.evals_result()
-        train_losses = evals_result['train']['mlogloss']
-        val_losses = evals_result['val']['mlogloss']
+        train_losses = evals_result['validation_0']['mlogloss'] # Training loss
+        val_losses = evals_result['validation_1']['mlogloss'] # Validation loss
         
         train_accuracies = []
         val_accuracies = []
@@ -136,7 +135,8 @@ class MomentumAwareBDT:
         for epoch in range(len(train_losses)):
             temp_model = xgb.XGBClassifier(**self.xgb_params)
             temp_model.set_params(n_estimators=epoch+1)
-            temp_model.fit(X_train, y_train, sample_weight=sample_weight_train, verbose=False)
+            temp_model.fit(X_train, y_train, sample_weight=sample_weight_train, verbose=False,
+                           eval_set=[(X_train, y_train), (X_val, y_val)])
             
             train_pred = temp_model.predict(X_train)
             val_pred = temp_model.predict(X_val)
