@@ -12,3 +12,4 @@ class DataConfig:
     add_pt: bool = True
     add_shower_shape: bool = True
     add_layer_ratios: bool = True
+    add_expected_cluster_size: bool = False
