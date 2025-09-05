@@ -18,6 +18,19 @@ PDG_CODE = {
     'Pr': 2212,
     'De': 1000010020,
     'He': 1000020030,
+    'Lambda': 3122,
+    'Omega': 3334,
+    'Xi': 3312,
+}
+
+LATEX_PARTICLE = {
+    'Pi': '#pi',
+    'Ka': 'K',
+    'Pr': 'p',
+    'De': 'd',
+    'He': '^{3}He',
+    'Lambda': '#Lambda',
+    'Omega': '#Omega',
 }
 
 PID_ROUTINE_DATASET_COLUMN_NAMES = {

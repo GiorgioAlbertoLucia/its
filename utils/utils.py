@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
-from ROOT import RooRealVar, RooDataHist, TH1F, TGraphErrors
+from ROOT import RooRealVar, RooDataHist, TH1F, TGraphErrors, RooFit
 
 def initialize_means_and_covariances_kmeans(hist: TH1F, n_components: int):
     '''
@@ -87,7 +87,7 @@ def initialize_means_and_covariances(hist: TH1F, n_components: int, method='gaus
 
     return _intialise_means_and_covariances[method](hist, n_components)
 
-def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_edge, pt_high_edge):
+def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_edge, pt_high_edge, range=None, extended=False):
     '''
         Fit a slice of the TOF mass histogram. Return the frame and the fit results
 
@@ -111,17 +111,25 @@ def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_
             - resolution (float): resolution value
             - resolution_err (float): resolution error
     '''
+    print(f'Fitting slice {pt_low_edge:.2f} < pT < {pt_high_edge:.2f} GeV/c')
 
     datahist = RooDataHist(f'dh_{pt_low_edge:.2f}_{pt_high_edge:.2f}', f'dh_{pt_low_edge:.2f}_{pt_high_edge:.2f}', [x], Import=hist)
-    model.fitTo(datahist, PrintLevel=-1)
+    print(f'Number of entries in the histogram: {datahist.sumEntries()}')
+    if range:
+        model.fitTo(datahist, PrintLevel=-1, Range=range, Extended=extended)
+    else:
+        model.fitTo(datahist, PrintLevel=-1, Extended=extended)
+    print('Fit results:')
 
-    frame = x.frame(Title=f'{pt_low_edge:.2f} < p_{{T}} < {pt_high_edge:.2f} GeV/#it{{c}}')
-    datahist.plotOn(frame)
-    model.plotOn(frame, LineColor=2)
+    frame = x.frame(Title=f'{pt_low_edge:.2f} < #it{{p}}_{{T}} < {pt_high_edge:.2f} GeV/#it{{c}}')
+    frame = frame.emptyClone(f'frame_{pt_low_edge:.2f}_{pt_high_edge:.2f}')
+    datahist.plotOn(frame, RooFit.Name('data'))
+    model.plotOn(frame, RooFit.Name('model'), LineColor=2)
     model.paramOn(frame)
     for icomp, component in enumerate(model.getComponents(), start=3):
-        component.plotOn(frame, LineColor=icomp, LineStyle='--')
-
+        #component.plotOn(frame, LineColor=icomp, LineStyle='--')
+        model.plotOn(frame, Components={component}, LineColor=icomp, LineStyle='--')
+    print(frame.chiSquare('model', 'data'))
     mean_err = signal_pars['sigma'].getVal() / np.sqrt(hist.Integral())
     resolution = signal_pars['sigma'].getVal() / signal_pars['mean'].getVal()
     resolution_error = resolution * np.sqrt((mean_err / signal_pars['mean'].getVal())**2 + (signal_pars['sigma'].getError() / signal_pars['sigma'].getVal())**2)
@@ -132,6 +140,30 @@ def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_
         'sigma_err': signal_pars['sigma'].getError(),
         'resolution': resolution,
         'resolution_err': resolution_error,
+        'chi2_ndf': frame.chiSquare('model', 'data')
     }
 
     return frame, fit_results
+
+def set_root_object(object, **kwargs):
+
+    if 'line_color' in kwargs:
+        object.SetLineColor(kwargs['line_color'])
+    if 'line_style' in kwargs:
+        object.SetLineStyle(kwargs['line_style'])
+    if 'line_width' in kwargs:
+        object.SetLineWidth(kwargs['line_width'])
+    if 'marker_color' in kwargs:
+        object.SetMarkerColor(kwargs['marker_color'])
+    if 'marker_style' in kwargs:
+        object.SetMarkerStyle(kwargs['marker_style'])
+    if 'marker_size' in kwargs:
+        object.SetMarkerSize(kwargs['marker_size'])
+    if 'fill_color' in kwargs:
+        object.SetFillColor(kwargs['fill_color'])
+    if 'fill_style' in kwargs:
+        object.SetFillStyle(kwargs['fill_style'])
+    if 'fill_color_alpha' in kwargs:
+        object.SetFillColorAlpha(*kwargs['fill_color_alpha'])
+    if 'title' in kwargs:
+        object.SetTitle(kwargs['title'])
