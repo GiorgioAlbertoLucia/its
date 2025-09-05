@@ -78,7 +78,7 @@ class DataProcessor:
         for layer in range(7):
             self.df[f'fItsClusterSizeL{layer}'] = np_unpack_cluster_sizes(self.df['fItsClusterSize'], layer)
 
-        self.df.loc[self.df['fPartID'] == PARTICLE_ID['He'], 'fP'] *= 2
+        #self.df.loc[self.df['fPartID'] == PARTICLE_ID['He'], 'fP'] *= 2
 
         self.df['fMeanItsClSize'], self.df['fNHitsIts'] = average_cluster_size(self.df['fItsClusterSize'])
         self.df['fClSizeCosL'] = self.df['fMeanItsClSize'] * self.df['fCosL']
@@ -114,14 +114,17 @@ class DataProcessor:
 
         for particle in particle_names:
             charge = 'Z=2' if particle == 'He' else 'Z=1'
+            charge_float = 2.0 if particle == 'He' else 1.0
+            momentum = self.df['fPAbs'] * charge_float
             
-            pid_params = (*bethe_bloch_params[charge].values(), *resolution_params[charge].values())
+            pid_params = list(bethe_bloch_params[charge].values()) + list(resolution_params[charge].values())
+            self.df[f'fBetaGamma{particle}'] = momentum / (Particle.from_pdgid(PDG_CODE[particle]).mass / 1_000)
             self.df[f'fExpectedClusterSize{particle}'] = expected_cluster_size(
-                self.df['fPAbs'] / Particle.from_pdgid(PDG_CODE[particle]).mass,
+                self.df[f'fBetaGamma{particle}'],
                 pid_params
             )
             self.df[f'fSigmaIts{particle}'] = sigma_its(
-                self.df['fPAbs'] / Particle.from_pdgid(PDG_CODE[particle]).mass,
+                self.df[f'fBetaGamma{particle}'],
                 pid_params, particle=particle
             )
             self.df[f'fNSigmaIts{particle}'] = (
@@ -145,6 +148,10 @@ class DataProcessor:
 
         self.df['fTotalClusterSize'] = self.df[cluster_cols].sum(axis=1)
 
+    def select_clean_data(self) -> None:
+
+        self.df.query(f'fNSigmaItsHe > -1.5 or fPartID != {PARTICLE_ID["He"]}', inplace=True)
+
     def prepare_features(self) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare features and labels for training."""
         self.feature_columns = self._get_feature_columns()
@@ -156,9 +163,15 @@ class DataProcessor:
     
     def _get_feature_columns(self) -> List[str]:
         """Get list of feature columns based on config."""
+
+
+        if self.config.feature_columns is not None:
+            return self.config.feature_columns
+
         base_features = [
             'fPAbs', 'fEta', 'fPhi', 'fCosL', 'fPt',
-            'fItsClusterSizeL0', 'fItsClusterSizeL1', 'fItsClusterSizeL2',
+            'fItsClusterSizeL0', 'fItsClusterSizeL1', 
+            'fItsClusterSizeL2',
             'fItsClusterSizeL3', 'fItsClusterSizeL4', 'fItsClusterSizeL5',
             'fItsClusterSizeL6', 'fMeanItsClSize', 'fClSizeCosL'
         ]
@@ -168,16 +181,18 @@ class DataProcessor:
             additional_features.extend([
                 'fClusterSizeStd', 'fClusterSizeSkew', 'fTotalClusterSize', 'fClusterSizeRange'
             ])
+        
+        parametrised_features = []
         if self.config.add_parametrised_features:
             particle_ids = self.df['fPartID'].unique()
             id_to_name_map = {v: k for k, v in PARTICLE_ID.items()}
             particle_names = [id_to_name_map[p] for p in particle_ids if p in id_to_name_map]
             for particle in particle_names:
-                additional_features.append(f'fExpectedClusterSize{particle}')
-                additional_features.append(f'fSigmaIts{particle}')
-                additional_features.append(f'fNSigmaIts{particle}')
-            
-        return base_features + additional_features
+                parametrised_features.append(f'fExpectedClusterSize{particle}')
+                parametrised_features.append(f'fSigmaIts{particle}')
+                parametrised_features.append(f'fNSigmaIts{particle}')
+
+        return base_features + additional_features + parametrised_features
     
     def balance_classes(self) -> None:
 
