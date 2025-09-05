@@ -179,9 +179,9 @@ def process_particle(infile, particle, outfile=None):
 def main():
     """Main function with hybrid approach using both fitters"""
     
-    input_file = '../output/data/LHC24_pass1_skimmed_calibration_beta_gamma_truncated.root'
-    output_file = '../output/data/fit_LHC24_pass1_skimmed_calibration_beta_gamma_truncated.root'
-    json_output_file = '../output/data/fit_parameters_LHC24_pass1_skimmed_calibration_beta_gamma_truncated.json'
+    input_file = '../output/data/LHC24_pass1_skimmed_calibration_beta_gamma_mean.root'
+    output_file = '../output/data/fit_LHC24_pass1_skimmed_calibration_beta_gamma_mean.root'
+    json_output_file = '../output/data/fit_parameters_LHC24_pass1_skimmed_calibration_beta_gamma_mean.json'
     
     print(f"Hybrid Bethe-Bloch Fitting Analysis")
     print(f"Using both ROOT and scipy optimization methods")
