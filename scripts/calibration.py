@@ -16,7 +16,7 @@ from particle import Particle
 
 import sys
 sys.path.append('..')
-from utils.pid_routine import average_cluster_size_with_mean, PARTICLE_ID, PDG_CODE
+from utils.pid_routine import PARTICLE_ID, PDG_CODE
 from utils.utils import calibration_fit_slice, initialize_means_and_covariances
 
 CONF = {
@@ -100,9 +100,9 @@ def prepare_dataset(dataset: Dataset, particle: str, mode: str = 'truncated'):
     dataset['fItsClusterSize'] = np.array(dataset['fItsClusterSize'], np.uint64)
     dataset['fAvgClSizeCosLam'], dataset['fNHitsIts'] = np.zeros(dataset.shape[0], dtype=float), np.zeros(dataset.shape[0], dtype=int)
     if mode == 'truncated':
-        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'])
+        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'], do_truncated=True)
     elif mode == 'mean':
-        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size_with_mean(dataset['fItsClusterSize'])
+        dataset['fAvgClusterSize'], dataset['fNHitsIts'] = average_cluster_size(dataset['fItsClusterSize'], do_truncated=False)
 
     dataset.query('fNHitsIts > 5', inplace=True)
     dataset['fAvgClSizeCosLam'] = dataset['fAvgClusterSize'] / np.cosh(dataset['fEta'])
@@ -201,6 +201,9 @@ def visualize_fit_results(dataset, fit_results_df, particle, bg_min, bg_max, par
     g_mean.Draw('ap')
     f_mean.Draw('same')
 
+    g_sigma = create_graph(fit_results_df, 'x', 'sigma', 'x_error', 'sigma_err', 
+                                f'g_sigma', f';{x_dict["axis_title"]};#sigma / #mu')
+
     g_resolution = create_graph(fit_results_df, 'x', 'resolution', 'x_error', 'resolution_err', 
                                 f'g_resolution', f';{x_dict["axis_title"]};#sigma / #mu')
     f_resolution = TF1('resolution_fit', '[0]*ROOT::Math::erf((x - [1])/[2])', bg_min, bg_max)
@@ -228,6 +231,7 @@ def visualize_fit_results(dataset, fit_results_df, particle, bg_min, bg_max, par
 
     particle_dir.cd()
     c_mean.Write()
+    g_sigma.Write()
     c_resolution.Write()
     h2_nsigma.Write()
 
