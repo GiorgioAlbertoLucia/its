@@ -3,25 +3,12 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from sklearn.metrics import classification_report
-from typing import Dict, Tuple, Optional
-from dataclasses import dataclass
+from typing import Tuple
 
-@dataclass
-class EvaluationResult:
-    """Container for evaluation results."""
-    predictions: np.ndarray
-    labels: np.ndarray
-    probabilities: np.ndarray
-    accuracy: float
-    features: Optional[np.ndarray] = None
-    classification_report: Optional[Dict] = None
-    
-    def __post_init__(self):
-        if self.classification_report is None:
-            self.classification_report = classification_report(
-                self.labels, self.predictions, output_dict=True
-            )
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from core.evaluation_result import EvaluationResult
 
 class Evaluator:
     """Handles model evaluation."""

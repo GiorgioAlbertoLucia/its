@@ -15,7 +15,7 @@ from core.processor import DataProcessor, torch_data_preparation
 from core.nn.factory import ModelFactory
 from core.nn.trainer import Trainer
 from core.nn.evaluator import Evaluator
-from core.nn.plotter import Plotter
+from core.plotter import Plotter
 from utils.pid_routine import PARTICLE_ID
 
 class Pipeline:
@@ -27,7 +27,7 @@ class Pipeline:
         
         # Initialize components
         self.data_processor = DataProcessor(config)
-        self.plotter = Plotter(config.output_dir)
+        self.plotter = Plotter(config.output_dir, config.output_file_suffix)
         
         # Will be set during pipeline
         self.model = None
@@ -44,18 +44,9 @@ class Pipeline:
                                           self.config.columns)
         self.data_processor.downsample_data()
         self.data_processor.engineer_features()
+        self.data_processor.select_clean_data()
         if self.config.balance_classes:
             self.data_processor.balance_classes()
-
-        part_id_column = self.data_processor.df['fPartID']
-        encoded_ids = self.data_processor.label_encoder.fit_transform(part_id_column.unique())
-        id_to_encoded_id_map = {k: v for k, v in zip(part_id_column.unique(), encoded_ids)}
-        encoded_id_to_name_map = {}
-        for name, id in PARTICLE_ID.items():
-            encoded_id = id_to_encoded_id_map.get(id, None)
-            if encoded_id is not None:
-                encoded_id_to_name_map[encoded_id] = name
-        class_names = encoded_id_to_name_map.values()
 
         X, y = self.data_processor.prepare_features()
         class_weights = self.data_processor.get_class_weights(y)
@@ -73,32 +64,7 @@ class Pipeline:
         test_results = self.evaluator.evaluate(test_loader, return_features=True)
         
         if self.config.save_plots:
-            self.plotter.plot_training_history(
-                training_state.train_losses, training_state.val_losses,
-                training_state.train_accuracies, training_state.val_accuracies
-            )
-            self.plotter.plot_confusion_matrix(
-                test_results.labels, test_results.predictions,
-                class_names
-            )
-            output_file = TFile(str(self.config.output_dir)+'/results.root', 'RECREATE')
-            self.plotter.plot_model_scores(test_results, 
-                class_names, output_file,
-                self.config.momentum_feature_idx
-            )
-            self.plotter.plot_roc_curves_per_class(
-                test_results, class_names,
-                output_file
-            )
-            self.plotter.plot_efficiency_purity_curves_momentum_bins(
-                test_results, class_names,
-                self.config.momentum_feature_idx, output_file
-            )
-            self.plotter.analyze_feature_importance_shap(
-                self.model,
-                test_results, self.data_processor.feature_columns,
-                encoded_id_to_name_map, output_file
-            )
+            self._create_plots(training_state, test_results)
         
         self._save_results(training_state, test_results)
         
@@ -119,6 +85,46 @@ class Pipeline:
             test_val_size=self.config.test_size + self.config.val_size
         )
     
+    def _create_plots(self, training_state, test_results):
+        
+        part_id_column = self.data_processor.df['fPartID']
+        encoded_ids = self.data_processor.label_encoder.fit_transform(part_id_column.unique())
+        id_to_encoded_id_map = {k: v for k, v in zip(part_id_column.unique(), encoded_ids)}
+        
+        encoded_id_to_name_map = {}
+        for name, id in PARTICLE_ID.items():
+            encoded_id = id_to_encoded_id_map.get(id, None)
+            if encoded_id is not None:
+                encoded_id_to_name_map[encoded_id] = name
+        class_names = list(encoded_id_to_name_map.values())
+        
+        self.plotter.plot_training_history(
+            training_state.train_losses, training_state.val_losses,
+            training_state.train_accuracies, training_state.val_accuracies
+        )
+        self.plotter.plot_confusion_matrix(
+            test_results.labels, test_results.predictions,
+            class_names
+        )
+        output_file = TFile(f'{self.config.output_dir}/results{self.config.output_file_suffix}.root', 'RECREATE')
+        self.plotter.plot_model_scores(test_results, 
+            class_names, output_file,
+            self.config.momentum_feature_idx
+        )
+        self.plotter.plot_roc_curves_per_class(
+            test_results, class_names,
+            output_file
+        )
+        self.plotter.plot_efficiency_purity_curves_momentum_bins(
+            test_results, class_names,
+            self.config.momentum_feature_idx, output_file
+        )
+        self.plotter.analyze_feature_importance_shap(
+            self.model,
+            test_results, self.data_processor.feature_columns,
+            encoded_id_to_name_map, output_file
+        )
+    
     def _save_results(self, training_state, test_results):
         """Save experiment results."""
         torch.save({
@@ -127,4 +133,4 @@ class Pipeline:
             'feature_columns': self.data_processor.feature_columns,
             'label_encoder': self.data_processor.label_encoder,
             'scaler': self.data_processor.scaler,
-        }, self.config.output_dir / 'trained_model.pth')
+        }, self.config.output_dir / f'trained_model{self.config.output_file_suffix}.pth')
