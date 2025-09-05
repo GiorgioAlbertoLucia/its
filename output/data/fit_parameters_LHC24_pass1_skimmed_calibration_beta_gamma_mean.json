@@ -1,0 +1,218 @@
+{
+  "metadata": {
+    "analysis_type": "bethe_bloch_fitting",
+    "fitting_method": "hybrid_root_scipy",
+    "timestamp": "2025-09-02T09:28:35.237613",
+    "description": "Best fit parameters from hybrid Bethe-Bloch fitting analysis"
+  },
+  "summary": {
+    "total_particles": 5,
+    "particles_analyzed": [
+      "Pi",
+      "Ka",
+      "Pr",
+      "De",
+      "He"
+    ]
+  },
+  "fit_results": {
+    "Pi": {
+      "particle": "Pi",
+      "function_type": "3p_bethe_bloch",
+      "optimizer": "scipy",
+      "strategy": "minimize_grid",
+      "chi2": 953.9163575060713,
+      "ndf": 33,
+      "chi2_ndf": 28.906556288062767,
+      "chi2_ndf_from_one": 27.906556288062767,
+      "success_score": 65.7196688641883,
+      "parameters": {
+        "coeff": {
+          "value": 1.1850944193948663,
+          "error": 0.0022455090908751136,
+          "index": 0
+        },
+        "power": {
+          "value": 2.196558840125776,
+          "error": 0.002215030417274732,
+          "index": 1
+        },
+        "offset": {
+          "value": 2.219658513912403,
+          "error": 0.00032494030744577106,
+          "index": 2
+        }
+      },
+      "fit_quality": {
+        "is_good_fit": "false",
+        "is_acceptable_fit": "false",
+        "fit_status": "poor"
+      }
+    },
+    "Ka": {
+      "particle": "Ka",
+      "function_type": "bethe_bloch_aleph",
+      "optimizer": "ROOT",
+      "strategy": "WL+",
+      "chi2": 117.9438916147948,
+      "ndf": 29,
+      "chi2_ndf": 4.067030745337751,
+      "chi2_ndf_from_one": 3.0670307453377514,
+      "success_score": 3.0670307453377514,
+      "parameters": {
+        "kp1": {
+          "value": 0.2363893148879163,
+          "error": 0.0039732208249326426,
+          "index": 0
+        },
+        "kp2": {
+          "value": 9.621743257451353,
+          "error": 0.14274090195793646,
+          "index": 1
+        },
+        "kp3": {
+          "value": 0.20692490871843788,
+          "error": 1.296621800989655,
+          "index": 2
+        },
+        "kp4": {
+          "value": 1.286588718160172,
+          "error": 0.038482838541813134,
+          "index": 3
+        },
+        "kp5": {
+          "value": 0.8518843110434059,
+          "error": 0.19178148917338259,
+          "index": 4
+        }
+      },
+      "fit_quality": {
+        "is_good_fit": "false",
+        "is_acceptable_fit": "false",
+        "fit_status": "poor"
+      }
+    },
+    "Pr": {
+      "particle": "Pr",
+      "function_type": "3p_bethe_bloch",
+      "optimizer": "scipy",
+      "strategy": "basinhopping",
+      "chi2": 8853.806756433585,
+      "ndf": 38,
+      "chi2_ndf": 232.99491464298907,
+      "chi2_ndf_from_one": 231.99491464298907,
+      "success_score": 677.9847439289672,
+      "parameters": {
+        "coeff": {
+          "value": 1.164236025445141,
+          "error": 0.00025092377812592677,
+          "index": 0
+        },
+        "power": {
+          "value": 1.5903058563443124,
+          "error": 0.0005966986490586984,
+          "index": 1
+        },
+        "offset": {
+          "value": 2.0783985485792003,
+          "error": 0.00020672526032502092,
+          "index": 2
+        }
+      },
+      "fit_quality": {
+        "is_good_fit": "false",
+        "is_acceptable_fit": "false",
+        "fit_status": "poor"
+      }
+    },
+    "De": {
+      "particle": "De",
+      "function_type": "3p_bethe_bloch",
+      "optimizer": "scipy",
+      "strategy": "basinhopping",
+      "chi2": 32300.62879485232,
+      "ndf": 29,
+      "chi2_ndf": 1113.8147860293905,
+      "chi2_ndf_from_one": 1112.8147860293905,
+      "success_score": 3320.4443580881716,
+      "parameters": {
+        "coeff": {
+          "value": 1.2229745430190686,
+          "error": 0.00036805098718203883,
+          "index": 0
+        },
+        "power": {
+          "value": 1.5306686362368458,
+          "error": 0.0006641629930971829,
+          "index": 1
+        },
+        "offset": {
+          "value": 1.9817200392590852,
+          "error": 0.00039726853401924646,
+          "index": 2
+        }
+      },
+      "fit_quality": {
+        "is_good_fit": "false",
+        "is_acceptable_fit": "false",
+        "fit_status": "poor"
+      }
+    },
+    "He": {
+      "particle": "He",
+      "function_type": "bethe_bloch_aleph",
+      "optimizer": "ROOT",
+      "strategy": "WL+",
+      "chi2": 88.22099437249943,
+      "ndf": 14,
+      "chi2_ndf": 6.301499598035674,
+      "chi2_ndf_from_one": 5.301499598035674,
+      "success_score": 5.301499598035674,
+      "parameters": {
+        "kp1": {
+          "value": 0.38854347131283357,
+          "error": 0.004589199136310209,
+          "index": 0
+        },
+        "kp2": {
+          "value": 10.106374831511035,
+          "error": 0.11957382302301604,
+          "index": 1
+        },
+        "kp3": {
+          "value": 0.050172541876402264,
+          "error": 0.006603991685397536,
+          "index": 2
+        },
+        "kp4": {
+          "value": 1.9653607895501843,
+          "error": 0.03242130150056023,
+          "index": 3
+        },
+        "kp5": {
+          "value": 4.7805960735736805,
+          "error": 0.16843452902178663,
+          "index": 4
+        }
+      },
+      "fit_quality": {
+        "is_good_fit": "false",
+        "is_acceptable_fit": "false",
+        "fit_status": "poor"
+      }
+    }
+  },
+  "global_statistics": {
+    "mean_chi2_ndf": 277.2169574607631,
+    "min_chi2_ndf": 4.067030745337751,
+    "max_chi2_ndf": 1113.8147860293905,
+    "function_usage": {
+      "3p_bethe_bloch": 3,
+      "bethe_bloch_aleph": 2
+    },
+    "optimizer_usage": {
+      "scipy": 3,
+      "ROOT": 2
+    }
+  }
+}
