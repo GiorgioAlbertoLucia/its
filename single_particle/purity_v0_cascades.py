@@ -2,15 +2,17 @@
     Code to run calibration of ITS and TPC parametrisations
 '''
 
+from typing import List
 import numpy as np
 import pandas as pd
-from ROOT import TFile, TCanvas, TF1, TMath, TLine, kDashed
+from ROOT import TFile, TCanvas, TF1, TMath, TLine, kDashed, TDirectory, TPaveText, TLegend
 from ROOT import RooRealVar, RooCrystalBall, RooGaussian, RooAddPdf, RooGenericPdf, RooArgusBG,\
     RooChebychev, RooHistPdf, RooDataHist, RooFit, RooArgSet
 
-from torchic.roopdf import RooGausExp, RooErf
+from torchic.roopdf import RooGausExp
 from torchic.core.graph import create_graph
 from torchic.utils.terminal_colors import TerminalColors as tc
+from torchic.utils.root import set_root_object
 
 from particle import Particle
 
@@ -25,12 +27,14 @@ CONF = {
         'x_min_fit': 0.7,
         'x_max_fit': 5,
         'x_nbins': 120,
-        'y_min': 1.09,
-        'y_max': 1.14,
+        #'y_min': 1.085,
+        #'y_max': 1.145,
+        'y_min': 1.095,
+        'y_max': 1.135,
         'y_min_lazy': 1.102,
         'y_max_lazy': 1.132,
         'invariant_mass_peak': 1.1157,
-        'invariant_mass_cut': 0.006,
+        'invariant_mass_cut': 0.06,
     },
     'Omega': {
         'x_min_fit': 1.1,
@@ -38,6 +42,8 @@ CONF = {
         'x_nbins': 60,
         'y_min': 1.65,
         'y_max': 1.695,
+        'invariant_mass_peak': 1.6725,
+        'invariant_mass_cut': 0.02,
     },
 }
 
@@ -52,11 +58,6 @@ DATASET_COLUMN_NAMES = {
     'ItsClusterSize':'fItsClusterSize',
 }
 
-H2_BKG_TEMPLATE = {
-    'Lambda': None,
-    'Omega': None
-}
-
 def init_signal_roofit(clsize: RooRealVar, function: str = 'crystalball', particle: str = 'Lambda'):
 
     if function == 'crystalball':
@@ -64,7 +65,7 @@ def init_signal_roofit(clsize: RooRealVar, function: str = 'crystalball', partic
             'mean': RooRealVar('mean', 'mean', 1.115, 1.10, 1.13),
             'sigma': RooRealVar('sigma', 'sigma', 0.003, 0.001, 0.02),
             'aL': RooRealVar('aL', 'aL', 1.5, 0.5, 5.0),
-            'nL': RooRealVar('nL', 'nL', 2.0, 0.5, 10.0),
+            'nL': RooRealVar('nL', 'nL', 2.0, 0.5, 15.0),
             'aR': RooRealVar('aR', 'aR', 1.5, 0.5, 5.),
             'nR': RooRealVar('nR', 'nR', 2.0, 0.5, 10.),
         }
@@ -134,7 +135,7 @@ def init_background_roofit(x: RooRealVar, function: str = 'gaus', particle: str 
         if particle == 'Lambda':
             bkg_pars = {
                 'offset': RooRealVar('bkg_offset', 'bkg_offset', 5., 0., 20.),
-                'slope': RooRealVar('bkg_slope', 'bkg_slope', -10., -50., -0.1),
+                'slope': RooRealVar('bkg_slope', 'bkg_slope', -10., -100., 100),
             }
         elif particle == 'Omega':
             bkg_pars = {
@@ -153,8 +154,8 @@ def init_background_roofit(x: RooRealVar, function: str = 'gaus', particle: str 
     
     elif function == 'pol1':
         bkg_pars = {
-            'p0': RooRealVar('bkg_p0', 'bkg_p0', 0., -10., 10.),
-            'p1': RooRealVar('bkg_p1', 'bkg_p1', 0., -10., 10.),
+            'p0': RooRealVar('bkg_p0', 'bkg_p0', 100, 20., 1e5),
+            'p1': RooRealVar('bkg_p1', 'bkg_p1', 0.1, -10., 10.),
         }
         bkg = RooGenericPdf('bkg', 'bkg', f'bkg_p0 + bkg_p1 * {x.GetName()}', [x, *bkg_pars.values()])
         return bkg, bkg_pars
@@ -206,19 +207,59 @@ def init_background_roofit(x: RooRealVar, function: str = 'gaus', particle: str 
         }
         bkg = RooChebychev('bkg', 'bkg', x, list(bkg_pars.values()))
         return bkg, bkg_pars
-    
-    elif function == 'erf':
-        bkg_pars = {
-            'mean': RooRealVar('bkg_mean', 'bkg_mean', 1.11, 0., 2, ''),
-            'sigma': RooRealVar('bkg_sigma', 'bkg_sigma', 0.01, 0.001, 0.1, ''),
-        }
-        bkg = RooErf('bkg', 'bkg', x, *bkg_pars.values())
-        return bkg, bkg_pars
 
     else:
         raise ValueError(f'Unknown function: {function}. Supported functions are "gausexp" and "gaus".')
 
+# SIGNAL INITIALISATION FROM MC
+
+H2_SIG_TEMPLATE = {
+    'Lambda': None,
+    'Omega': None
+}
+
+def load_template_signal(particle: str):
+
+    infile = TFile.Open(f'/data/galucia/its_pid/LHC24_pass1_skimmed/analysis_results_mc_19_09_2025.root ', 'READ')
+    h_name = 'massLambdaMc' if particle == 'Lambda' else 'massOmegaMc'
+    H2_SIG_TEMPLATE[particle] = infile.Get(f'lf-tree-creator-cluster-studies/LFTreeCreator/{h_name}')
+    H2_SIG_TEMPLATE[particle].SetDirectory(0)
+    infile.Close()
+
+def init_signal_from_template(particle: str, ibin: int, xvar: RooRealVar, signal_pdf, signal_pars, outfile, pt_edges: List[float]): 
+
+    if H2_SIG_TEMPLATE[particle] is None:
+        load_template_signal(particle)
+    
+    h2_sig = H2_SIG_TEMPLATE[particle]
+    h_sig = h2_sig.ProjectionY(f'h_sig_{particle}_{ibin}', ibin, ibin, 'e')
+    dh_sig = RooDataHist(f'data_sig_{particle}_{ibin}', f'data_sig_{particle}_{ibin}', [xvar], Import=h_sig)
+    signal_pdf.fitTo(dh_sig, PrintLevel=-1)
+
+    frame = xvar.frame(Title=f'{pt_edges[0]:.2f} < #it{{p}}_{{T}} < {pt_edges[1]:.2f} GeV/#it{{c}}')
+    dh_sig.plotOn(frame, RooFit.Name('data'))
+    signal_pdf.plotOn(frame, RooFit.Name('model'), LineColor=2)
+    signal_pdf.paramOn(frame)
+
+    signal_pars['sigma'].setConstant(True)
+    if 'aL' in signal_pars.keys():  signal_pars['aL'].setConstant(True)
+    if 'nL' in signal_pars.keys():  signal_pars['nL'].setConstant(True)
+    if 'aR'in signal_pars.keys():   signal_pars['aR'].setConstant(True)
+    if 'nR' in signal_pars.keys():  signal_pars['nR'].setConstant(True)
+
+    canvas = TCanvas(f'cInvMassSignal_{ibin:.2f}', f'cInvMassSignal_{ibin:.2f}', 800, 600)
+    frame.Draw()
+    outfile.cd()
+    canvas.Write()
+
+    
+
 # BACKGROUND INITIALISATION
+
+H2_BKG_TEMPLATE = {
+    'Lambda': None,
+    'Omega': None
+}
 
 def initialize_exponential_from_data(h_invmass, invmass_var, particle):
     """Initialize exponential parameters from histogram tail regions"""
@@ -266,18 +307,48 @@ def initialize_exponential_from_data(h_invmass, invmass_var, particle):
     
     return slope_estimate, offset_estimate
 
-def load_template_background(particle: str):
+def load_template_background(particle: str, mode: str = 'mixing', outfile = None):
+    if mode == 'mixing':
+        return load_template_background_from_mixing(particle, outfile)
+    elif mode == 'mc':
+        return load_template_background_from_mc(particle, outfile)
+    else:
+        raise ValueError('Invalid value for mode. Accepted values are "mixing", "mc"')
+
+def load_template_background_from_mixing(particle: str, outfile = None):
 
     infile = TFile.Open(f'/home/galucia/its/single_particle/output/v0_cascade_mixing.root', 'READ')
-    #H2_BKG_TEMPLATE[particle] = infile.Get(f'h2PInvariantMassRotation')
-    H2_BKG_TEMPLATE[particle] = infile.Get(f'h2PInvariantMassLikeSign')
+    H2_BKG_TEMPLATE[particle] = infile.Get(f'h2PInvariantMassRotation')
+    #H2_BKG_TEMPLATE[particle] = infile.Get(f'h2PInvariantMassLikeSign')
     H2_BKG_TEMPLATE[particle].SetDirectory(0)
     infile.Close()
 
-def get_template_background(particle: str, ibin: int, xvar:RooRealVar):
+    if outfile:
+        outfile.cd()
+        H2_BKG_TEMPLATE[particle].Write('h2Bkg')
+
+def load_template_background_from_mc(particle: str, outfile = None):
+
+    infile = TFile.Open(f'/data/galucia/its_pid/LHC24_pass1_skimmed/analysis_results_mc_19_09_2025.root ', 'READ')
+    h_name_signal = 'massLambdaMc' if particle == 'Lambda' else 'massOmegaMc'
+    h_name_total = 'massLambda' if particle == 'Lambda' else 'massOmega'
+    h2_signal = infile.Get(f'lf-tree-creator-cluster-studies/LFTreeCreator/{h_name_signal}')
+    h2_signal.RebinY()
+    h2_total = infile.Get(f'lf-tree-creator-cluster-studies/LFTreeCreator/{h_name_total}')
+    h2_total.RebinY()
+    h2_total.Add(h2_signal, -1.)
+    H2_BKG_TEMPLATE[particle] = h2_total
+    H2_BKG_TEMPLATE[particle].SetDirectory(0)
+    infile.Close()
+
+    if outfile:
+        outfile.cd()
+        H2_BKG_TEMPLATE[particle].Write('h2Bkg')
+
+def get_template_background(particle: str, ibin: int, xvar: RooRealVar, mode: str = 'mixing', outfile: TDirectory = None):
 
     if H2_BKG_TEMPLATE[particle] is None:
-        load_template_background(particle)
+        load_template_background(particle, mode, outfile)
     
     h2_bkg = H2_BKG_TEMPLATE[particle]
     h_bkg = h2_bkg.ProjectionY(f'h_bkg_{particle}_{ibin}', ibin, ibin, 'e')
@@ -344,9 +415,12 @@ def visualize_fit_results(fit_results_df, particle, particle_dir):
 def fit_routine(h2_invariant_mass, outfile: TFile, particle: str): 
 
     cfg = CONF[particle]
+    outdir_fits = outfile.mkdir('fits')
+    outdir_prefits = outfile.mkdir('prefits')
 
-    invmass = RooRealVar('fInvariantMass', '#LT Cluster size #GT #LT cos#lambda #GT', cfg['y_min'], cfg['y_max'], 'GeV/c^{2}')
+    invmass = RooRealVar('fInvariantMass', '#it{m}_{#Lambda}' if particle == 'Lambda' else '#it{m}_{#Omega}', cfg['y_min'], cfg['y_max'], 'GeV/c^{2}')
     signal_func = 'crystalball' if particle in ['Lambda'] else 'gausexp'
+    #signal_func = 'gaus' if particle in ['Lambda'] else 'gausexp'
 
     x_min = cfg['x_min_fit']
     x_max = cfg['x_max_fit']
@@ -362,14 +436,21 @@ def fit_routine(h2_invariant_mass, outfile: TFile, particle: str):
         x_low_edge = h2_invariant_mass.GetXaxis().GetBinLowEdge(x_bin)
         x_high_edge = h2_invariant_mass.GetXaxis().GetBinLowEdge(x_bin+1)
         
-        bkg_func = 'erf' #if (particle in ['Lambda'] and np.abs(ix) > 1.5) else 'pol2'
+        bkg_func = 'pol1' #if (particle in ['Lambda'] and np.abs(ix) > 1.5) else 'pol2'
         signal, signal_pars = init_signal_roofit(invmass, function=signal_func, particle=particle)
         bkg, bkg_pars = init_background_roofit(invmass, function=bkg_func, particle=particle)
-        if np.abs(ix) < 1.5 and particle == 'Lambda':
+        if particle == 'Omega' and 'bkg_p0' in bkg_pars and 'bkg_p1' in bkg_pars:
+            bkg_pars['bkg_p0'].setRange(0.1, 1e5)
+            bkg_pars['bkg_p1'].setRange(-1000, 1)
+        if np.abs(ix) < 1.5 and particle == 'Lambda' and 'erf' in bkg_func:
             bkg_pars['mean'].setVal(1.115)
             bkg_pars['mean'].setRange(1.10, 1.13)
         
         h_invmass = h2_invariant_mass.ProjectionY(f'invmass_{ix:.2f}', x_bin, x_bin, 'e')
+        for ibin in range(1, h_invmass.GetNbinsX()):
+            xvalue_bin = h_invmass.GetBinCenter(ibin)
+            if xvalue_bin < cfg['y_min'] or xvalue_bin > cfg['y_max']:
+                h_invmass.SetBinContent(ibin, 0)
         if h_invmass.GetEntries() <= 0:
             print(f'No entries for particle {particle}, p = {ix:.2f}, skipping...')
             continue
@@ -378,17 +459,21 @@ def fit_routine(h2_invariant_mass, outfile: TFile, particle: str):
         was_template_used = False
         
         if h_invmass.GetEntries() > 30:
-            if not was_template_used:
-                print(f'{tc.BLUE}Fitting with sidebands for particle {particle}, p = {ix:.2f}{tc.RESET}')
-                fit_with_sidebands(h_invmass,  invmass, bkg, bkg_pars, 
-                                (cfg['invariant_mass_peak'] - cfg['invariant_mass_cut'],
-                                 cfg['invariant_mass_peak'] + cfg['invariant_mass_cut']))
-                for par in bkg_pars.values():
-                    par.setConstant(True)
+            #if not was_template_used:
+            #    print(f'{tc.BLUE}Fitting with sidebands for particle {particle}, p = {ix:.2f}{tc.RESET}')
+            #    fit_with_sidebands(h_invmass,  invmass, bkg, bkg_pars, 
+            #                    (cfg['invariant_mass_peak'] - cfg['invariant_mass_cut'],
+            #                     cfg['invariant_mass_peak'] + cfg['invariant_mass_cut']))
+            #    for par in bkg_pars.values():
+            #        par.setConstant(True)
 
             means, sigmas = initialize_means_and_covariances(h_invmass, 1, method='kmeans')
             signal_pars['mean'].setVal(means[0])
+            signal_pars['mean'].setRange(means[0]-0.1*cfg['invariant_mass_cut'], means[0]+0.1*cfg['invariant_mass_cut'])
             signal_pars['sigma'].setVal(np.sqrt(sigmas[0]))
+
+            if particle == 'Lambda':
+                init_signal_from_template(particle, x_bin, invmass, signal, signal_pars, outdir_prefits, [x_low_edge, x_high_edge])
 
             if 'exp' in str(bkg):  # Check if using exponential
                 slope_est, offset_est = initialize_exponential_from_data(h_invmass, invmass, particle)
@@ -399,21 +484,22 @@ def fit_routine(h2_invariant_mass, outfile: TFile, particle: str):
         model = RooAddPdf('model', 'signal + bkg', [signal, bkg], [sig_frac])
 
         # Template background
-        if particle == 'Lambda' and np.abs(ix) < 1.5: #  and False:
-            bkg, h_bkg, dh_bkg = get_template_background(particle, x_bin, invmass)
+        if particle == 'Lambda' and np.abs(ix) < 1.5 and False:
+            bkg, h_bkg, dh_bkg = get_template_background(particle, x_bin, invmass, mode='mixing', outfile=outfile)
             model = RooAddPdf('model', f'signal + bkg_{particle}_{x_bin}', [signal, bkg], [sig_frac])
             was_template_used = True
 
-        frame, fit_results = calibration_fit_slice(model, h_invmass, invmass, signal_pars, x_low_edge, x_high_edge)
+        frame, fit_results = calibration_fit_slice(model, h_invmass, invmass, signal_pars, x_low_edge, x_high_edge,
+                                                   range=(cfg['y_min'], cfg['y_max']), draw_param_on=(particle!='Lambda'))
         frame.SetTitle(f'{particle} invariant mass, #it{{p}} = {ix:.2f} GeV/#it{{c}};{invmass.GetTitle()};Counts')
 
-        invmass.setRange('signal_range', cfg['invariant_mass_peak'] - 0.01, cfg['invariant_mass_peak'] + 0.01)
-        sig_integral = signal.createIntegral(invmass, Range='signal_range', NormSet=invmass)
-        tot_integral = model.createIntegral(invmass, Range='signal_range')
+        invmass.setRange('signal_range', cfg['invariant_mass_peak'] - cfg['invariant_mass_cut'], cfg['invariant_mass_peak'] + cfg['invariant_mass_cut'])
+        sig_integral = signal.createIntegral([invmass], Range='signal_range', NormSet=invmass)
+        background_integral = bkg.createIntegral([invmass], Range='signal_range', NormSet=invmass)
         
         fit_results['x'] = np.abs(ix)
         fit_results['x_error'] = x_error
-        fit_results['purity'] = sig_integral.getVal() / tot_integral.getVal() if tot_integral.getVal() > 0 else 0
+        fit_results['purity'] = sig_frac.getVal() * sig_integral.getVal() / (sig_frac.getVal() * sig_integral.getVal() + (1 - sig_frac.getVal()) * background_integral.getVal())
         fit_results['purity_err'] = 0
         if fit_results_df is None:
             fit_results_df = pd.DataFrame.from_dict([fit_results])
@@ -421,10 +507,33 @@ def fit_routine(h2_invariant_mass, outfile: TFile, particle: str):
             fit_results_df = pd.concat([fit_results_df, pd.DataFrame.from_dict([fit_results])], ignore_index=True)
 
         canvas = TCanvas(f'cInvMass_{ix:.2f}', f'cInvMass_{ix:.2f}', 800, 600)
+
+        vertical_lines = [TLine(cfg['invariant_mass_peak'] - cfg['invariant_mass_cut'], 10, cfg['invariant_mass_peak'] - cfg['invariant_mass_cut'], h_invmass.GetMaximum()),
+                          TLine(cfg['invariant_mass_peak'] + cfg['invariant_mass_cut'], 10, cfg['invariant_mass_peak'] + cfg['invariant_mass_cut'], h_invmass.GetMaximum())]
         canvas.SetLogy()
-        frame.SetMinimum(1)
+        frame.SetMinimum(10 if particle=='Lambda' else 0.1)
         frame.Draw()
-        outfile.cd()
+        
+        text = TPaveText(0.7, 0.7, .85, 0.85, 'ndc')
+        text.SetFillColor(0)
+        text.SetBorderSize(0)
+        text.AddText(f'#chi^{{2}} / ndf = {fit_results["chi2_ndf"]:.2f}')
+        text.AddText(f'Purity = {fit_results["purity"]:.3f}')
+        text.Draw('same')
+        
+        legend = TLegend(0.2, 0.7, 0.35, 0.85)
+        legend.SetFillColor(0)
+        legend.SetBorderSize(0)
+        legend.AddEntry(frame.findObject('model'), 'signal+bkg', 'l')
+        legend.AddEntry(frame.findObject('signal'), 'signal', 'l')
+        legend.AddEntry(frame.findObject('bkg'), 'bkg', 'l')
+        legend.AddEntry(vertical_lines[0], 'ROI', 'l')
+        legend.Draw('same')
+        
+        for line in vertical_lines:
+            set_root_object(line, line_style=2, line_width=2, line_color=797)
+            line.Draw('same')
+        outdir_fits.cd()
         canvas.Write()
 
     if fit_results_df is None:
@@ -527,7 +636,7 @@ def main_routine(infile_path: str):
     outfile_path = f'output/purity_v0_cascade.root'
     outfile = TFile.Open(outfile_path, 'RECREATE')
     
-    particles = ['Lambda']#, 'Omega']
+    particles = ['Lambda', 'Omega']
     for particle in particles:
         
         h2_invariant_mass = infile.Get(f'lf-tree-creator-cluster-studies/LFTreeCreator/mass{particle}')

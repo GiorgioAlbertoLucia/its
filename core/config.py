@@ -63,10 +63,18 @@ class ExperimentConfig:
     early_stopping_patience: int = 10
     weight_decay: float = 1e-4
     feature_columns: List[str] = None
+
+    # Optuna settings
+    use_optuna: bool = False
+    save_output_optuna: bool = True
+    optuna_trials: int = 100
+    optuna_timeout: Optional[int] = None
+    optuna_cv_folds: int = 3
     
     # Evaluation settings
     test_size: float = 0.2
     val_size: float = 0.2
+    run_shap_analysis: bool = False
     
     # Output settings
     output_dir: Path = Path("../output")

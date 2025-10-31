@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import erf
 from ROOT import TCanvas, gStyle, TF1, \
-    kOrange, kGreen, kRed, kBlack, kAzure, kViolet, TLatex
+    kOrange, kGreen, kRed, kBlack, kAzure, kViolet, TLatex, TPaveText
 from particle import Particle
 
 from torchic import Dataset, AxisSpec
@@ -103,13 +103,13 @@ def visualize_cluster_size(dataset: Dataset, particle, pdf_file_path:str):
     canvas.SetBottomMargin(0.15)
 
     axis_spec_x = AxisSpec(50, 0, 5, 'rigidity', ';;')
-    axis_spec_cluster_size = AxisSpec(180, 0, 15, 'AvgClSizeCosLam', ';#it{p}/|#it{Z}| (GeV/#it{c});#LT ITS cluster size#GT #times #LT cos#lambda#GT;')
+    axis_spec_cluster_size = AxisSpec(180, 0, 15, 'AvgClSizeCosLam', ';#it{p}/|#it{Z}| (GeV/#it{c});#LT ITS cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     h2_cluster_size = dataset.build_th2('fP', f'fAvgClSizeCosLam', axis_spec_x, axis_spec_cluster_size,
-                                        title=';#it{p}/|#it{Z}| (GeV/#it{c});#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+                                        title=';#it{p}/|#it{Z}| (GeV/#it{c});#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     h2_cluster_size.GetXaxis().SetTitleSize(0.05)
     h2_cluster_size.GetYaxis().SetTitleSize(0.05)
     
-    watermark = get_alice_watermark(0.5, 0.7, 0.8, 0.85)
+    watermark = get_alice_watermark(0.55, 0.73, 0.84, 0.88)
 
     canvas.cd()
     h2_cluster_size.Draw('col')
@@ -155,8 +155,18 @@ def visualize_cluster_size(dataset: Dataset, particle, pdf_file_path:str):
             funcs.append(func)
 
     canvas.cd()
+    legend = init_legend(0.6, 0.67, 0.88, 0.71)
+    legend.AddEntry(funcs[0], 'p_{0} / (#beta#gamma)^{p_{1}} + p_{2}', 'l')
+    text = TPaveText(0.56, 0.57, 0.84, 0.66, 'NDC')
+    text.SetFillColor(0)
+    text.SetBorderSize(0)
+    text.AddText('#bf{p_{1}(#it{Z} = 1) = 1.96#kern[0.4]{#pm} 0.03}')
+    text.AddText('#bf{p_{1}(#it{Z} = 2) = 1.71#kern[0.4]{#pm} 0.02}')
     for func in funcs:
         func.Draw('same l')
+    legend.Draw()
+    text.Draw('same')
+
     canvas.Print(pdf_file_path)
 
     canvas.Clear()
@@ -175,7 +185,7 @@ def visualize_cluster_size(dataset: Dataset, particle, pdf_file_path:str):
         for iparticle in particle_list:
             dataset_momentum_bin_particle:Dataset = dataset_momentum_bin.query(f'fPartID == {PARTICLE_ID[iparticle]}', inplace=False)
             h_particle = dataset_momentum_bin_particle.build_th1('fAvgClSizeCosLam', axis_spec_cluster_size,
-                                                                 title=f'{momentum_bins[imomentum]} #leq |#it{{p}}|/#it{{Z}} < {momentum_bins[imomentum+1]};#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+                                                                 title=f'{momentum_bins[imomentum]} #leq |#it{{p}}|/#it{{Z}} < {momentum_bins[imomentum+1]};#LT ITS Cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}};')
             h_particle.SetName(f'h_{iparticle}_momentum_bin_{imomentum}')
             set_root_object(h_particle, line_color=TCOLOR_PARTICLE[iparticle], line_width=1, fill_style=3244,
                             fill_color_alpha=(TCOLOR_PARTICLE[iparticle], 0.5))
@@ -188,7 +198,7 @@ def visualize_cluster_size(dataset: Dataset, particle, pdf_file_path:str):
         for ih, h in enumerate(h_particles):
             if ih == 0:
                 h.DrawNormalized('hist')
-                h.SetTitle(f'{momentum_bins[imomentum]} #leq |#it{{p}}|/#it{{Z}} < {momentum_bins[imomentum+1]};#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+                h.SetTitle(f'{momentum_bins[imomentum]} #leq |#it{{p}}|/#it{{Z}} < {momentum_bins[imomentum+1]};#LT ITS Cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}};')
             else:
                 h.DrawNormalized('hist same')
         legend.Draw()
@@ -287,11 +297,11 @@ def visualise_cluster_size_he3(dataset: Dataset, pdf_file_path:str):
 
     axis_spec_nsigma = AxisSpec(100, -2.5, 2.5, 'nsigma', 
                                 f';#it{{p}}/#it{{Z}} (GeV/#it{{c}});n#sigma_{{TPC}} (^{{3}}He);')
-    axis_spec_clsize = AxisSpec(180, 0, 15, 'AvgClSizeCosLam', ';n#sigma_{{TPC}} (^{{3}}He);#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+    axis_spec_clsize = AxisSpec(180, 0, 15, 'AvgClSizeCosLam', ';n#sigma_{{TPC}} (^{{3}}He);#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
 
     dataset_he3 = dataset.query(f'fPartID == {PARTICLE_ID["He"]}', inplace=False)
     h2_nsigma = dataset_he3.build_th2('fTpcNSigma', f'fAvgClSizeCosLam', axis_spec_nsigma, axis_spec_clsize,
-                                    title=';n#sigma_{TPC} (^3He);#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+                                    title=';n#sigma_{TPC} (^3He);#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     
     canvas = TCanvas(f'c_he3', '', 800, 600)
     canvas.SetLeftMargin(0.15)
@@ -306,7 +316,7 @@ def visualise_cluster_size_he3(dataset: Dataset, pdf_file_path:str):
     he3_text.SetTextColor(0)
 
     h2_nsigma.Draw('colz')
-    h2_nsigma.SetTitle(';n#sigma_{TPC} (^3He);#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+    h2_nsigma.SetTitle(';n#sigma_{TPC} (^3He);#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     watermark = get_alice_watermark(0.15, 0.7, 0.35, 0.85)
     watermark.Draw('same')
     he3_text.Draw('same')

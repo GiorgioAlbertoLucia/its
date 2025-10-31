@@ -87,7 +87,7 @@ def initialize_means_and_covariances(hist: TH1F, n_components: int, method='gaus
 
     return _intialise_means_and_covariances[method](hist, n_components)
 
-def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_edge, pt_high_edge, range=None, extended=False):
+def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_edge, pt_high_edge, range=None, extended=False, draw_param_on=False, show_constant_params=False):
     '''
         Fit a slice of the TOF mass histogram. Return the frame and the fit results
 
@@ -124,12 +124,13 @@ def calibration_fit_slice(model, hist: TH1F, x: RooRealVar, signal_pars, pt_low_
     frame = x.frame(Title=f'{pt_low_edge:.2f} < #it{{p}}_{{T}} < {pt_high_edge:.2f} GeV/#it{{c}}')
     frame = frame.emptyClone(f'frame_{pt_low_edge:.2f}_{pt_high_edge:.2f}')
     datahist.plotOn(frame, RooFit.Name('data'))
-    model.plotOn(frame, RooFit.Name('model'), LineColor=2)
-    model.paramOn(frame)
-    for icomp, component in enumerate(model.getComponents(), start=3):
-        #component.plotOn(frame, LineColor=icomp, LineStyle='--')
-        model.plotOn(frame, Components={component}, LineColor=icomp, LineStyle='--')
-    print(frame.chiSquare('model', 'data'))
+    #model.plotOn(frame, RooFit.Name('model'), LineColor=2)
+    if draw_param_on:
+        model.paramOn(frame, ShowConstants=show_constant_params)
+    for icomp, component in enumerate(model.getComponents(), start=2):
+        line_style = 1 if component.GetName() == model.GetName() else '--'
+        model.plotOn(frame, Name={component.GetName()}, Components={component}, LineColor=icomp, LineStyle=line_style)
+
     mean_err = signal_pars['sigma'].getVal() / np.sqrt(hist.Integral())
     resolution = signal_pars['sigma'].getVal() / signal_pars['mean'].getVal()
     resolution_error = resolution * np.sqrt((mean_err / signal_pars['mean'].getVal())**2 + (signal_pars['sigma'].getError() / signal_pars['sigma'].getVal())**2)

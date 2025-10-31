@@ -86,6 +86,7 @@ class Pipeline:
         self.trainer = Trainer(self.model, self.config, class_weights)
         training_state = self.trainer.train(data_holder.X_train, data_holder.y_train,
                                            data_holder.X_val, data_holder.y_val)
+        self.model = self.trainer.model
 
         self.evaluator = Evaluator(self.model)
         test_results = self.evaluator.evaluate(data_holder.X_test, data_holder.y_test, return_features=True)
@@ -135,9 +136,10 @@ class Pipeline:
             test_results, class_names, self.config.momentum_feature_idx, output_file
         )
 
-        self.plotter.analyze_feature_importance_flexible(
-            self.model, test_results, self.data_processor.feature_columns, 
-            encoded_id_to_name_map, output_file
-        )
+        if self.config.run_shap_analysis:
+            self.plotter.analyze_feature_importance_flexible(
+                self.model, test_results, self.data_processor.feature_columns, 
+                encoded_id_to_name_map, output_file
+            )
         
         output_file.Close()

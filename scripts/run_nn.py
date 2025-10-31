@@ -36,6 +36,7 @@ def main():
             #'fSigmaItsPi', 'fSigmaItsKa', 'fSigmaItsPr', 'fSigmaItsDe', 'fSigmaItsHe',
         ],
         min_hits_required=7,
+        run_shap_analysis=True,
     )
     
     pipeline = Pipeline(config)

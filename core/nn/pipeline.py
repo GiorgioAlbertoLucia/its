@@ -119,11 +119,13 @@ class Pipeline:
             test_results, class_names,
             self.config.momentum_feature_idx, output_file
         )
-        self.plotter.analyze_feature_importance_shap(
-            self.model,
-            test_results, self.data_processor.feature_columns,
-            encoded_id_to_name_map, output_file
-        )
+
+        if self.config.run_shap_analysis:
+            self.plotter.analyze_feature_importance_shap(
+                self.model,
+                test_results, self.data_processor.feature_columns,
+                encoded_id_to_name_map, output_file
+            )
     
     def _save_results(self, training_state, test_results):
         """Save experiment results."""

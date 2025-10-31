@@ -18,8 +18,8 @@ TLATEX_PARTICLE_NAMES = {
     'Pi': '#pi^{#pm}',
     'Ka': 'K^{#pm}',
     'Pr': 'p +#kern[0.6]{#bar{p}}',
-    'Xi': '#Xi^{+}',
-    'Omega': '#Omega^{+}',
+    'Xi': '#Xi +#kern[0.6]{#bar{#Xi}}',
+    'Omega': '#Omega +#kern[0.6]{#bar{#Omega}}',
     'De': '#bar{d}',
     'He': '^{3}He +#kern[0.2]{^{3}#bar{He}}',
 }
@@ -53,7 +53,7 @@ def get_alice_watermark(x_min, y_min, x_max, y_max) -> TPaveText:
     watermark.SetTextSize(0.04)
     watermark.AddText('#bf{ALICE Performance}')
     watermark.AddText('#bf{Run 3}')
-    watermark.AddText('#bf{pp #sqrt{s} = 13.6 TeV}')
+    watermark.AddText('#bf{pp #sqrt{#it{s}} = 13.6 TeV}')
     #watermark.AddText('#bf{LHC24 pass1}')
 
     return watermark
@@ -158,13 +158,13 @@ def get_frame_init(mode:str, y:str='mean'):
     
     if y == 'mean':
         FRAME_INIT = {
-                        'beta_gamma': (0, 1, 5.5, 9.5, f'{mode};#beta#gamma;#LT ITS cluster size#GT #times #LT cos#lambda#GT'),
-                        'p': (0.15, 1, 7, 13, f'{mode};#it{{p}}/|#it{{Z}}| (GeV/#it{{c}});#LT ITS cluster size#GT #times #LT cos#lambda#GT')
+                        'beta_gamma': (0, 1, 5.5, 9.5, f'{mode};#beta#gamma;#LT ITS cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}}'),
+                        'p': (0.15, 1, 7, 13, f'{mode};#it{{p}}/|#it{{Z}}| (GeV/#it{{c}});#LT ITS cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}}')
                      }
     elif y == 'resolution':
         FRAME_INIT = {
-                        'beta_gamma': (0, 0.07, 5.5, 0.28, f'{mode};#beta#gamma;#frac{{#sigma}}{{#LT ITS cluster size#GT #times #LT cos#lambda#GT}}'),
-                        'p': (-0.5, 0.09, 7, 0.28, f'{mode};#it{{p}}/|#it{{Z}}| (GeV/#it{{c}});#frac{{#sigma}}{{#LT ITS cluster size#GT #times #LT cos#lambda#GT}}')
+                        'beta_gamma': (0, 0.07, 5.5, 0.28, f'{mode};#beta#gamma;#frac{{#sigma}}{{#LT ITS cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}}}}'),
+                        'p': (-0.5, 0.09, 7, 0.28, f'{mode};#it{{p}}/|#it{{Z}}| (GeV/#it{{c}});#frac{{#sigma}}{{#LT ITS cluster size#kern[1]{{#GT}} #times #LT cos#lambda#kern[1]{{#GT}}}}')
                      }
     else:
         raise ValueError(f'Unsupported y value: {y}. Supported values are "mean" and "resolution".')
@@ -269,15 +269,32 @@ def superimpose_average_cluster_size_with_bands(output_canvas_path, x: str = 'be
 
     mode_suffix = '_trunc' if mode == 'truncated' else ''
     x_suffix = 'momentum' if x == 'p' else 'betagamma'
-    #for particle_small, particle in zip(['xi', 'omega'], ['Xi', 'Omega']):
-    #    input_file = TFile.Open(f'../output/caliva/cluster_size_{particle_small}_vs_{x_suffix}{mode_suffix}.root', 'READ')
-    #    hist = input_file.Get(f'mean_{particle_small}_pos')
-    #    graph = hist_to_graph(hist, f'g_mean_{particle}')
-    #    graph = get_resolution_band(graph, particle, n_sigma=1.0)
-    #    
-    #    graph = prepare_graph(graph, legend, particle)
-    #    set_root_object(graph, fill_style=3001, fill_color=TCOLOR_PARTICLE[particle])
-    #    g_means.append(graph)
+    if x == 'beta_gamma':
+        for particle_small, particle in zip(['xi', 'omega'], ['Xi', 'Omega']):
+            input_file = TFile.Open(f'../output/caliva/cluster_size_{particle_small}_vs_{x_suffix}{mode_suffix}.root', 'READ')
+            hist_pos = input_file.Get(f'mean_{particle_small}_pos')
+            hist_neg = input_file.Get(f'mean_{particle_small}_neg')
+            hist = hist_pos.Clone(f'mean_{particle_small}')
+            for ibin in range(1, hist.GetNbinsX() + 1):
+                content_pos = hist_pos.GetBinContent(ibin)
+                content_neg = hist_neg.GetBinContent(ibin)
+                error_pos = hist_pos.GetBinError(ibin)
+                error_neg = hist_neg.GetBinError(ibin)
+                if content_pos > 0 and content_neg > 0:
+                    new_content = 0.5 * (content_pos + content_neg)
+                    new_error = 0.5 * np.sqrt(error_pos**2 + error_neg**2)
+                    hist.SetBinContent(ibin, new_content)
+                    hist.SetBinError(ibin, new_error)
+                else:
+                    hist.SetBinContent(ibin, 0)
+                    hist.SetBinError(ibin, 0)
+
+            graph = hist_to_graph(hist, f'g_mean_{particle}')
+            graph = get_resolution_band(graph, particle, n_sigma=1.0)
+
+            graph = prepare_graph(graph, legend, particle, legend_option='fp')
+            set_root_object(graph, fill_style=3004, fill_color=TCOLOR_PARTICLE[particle])
+            g_means.append(graph)
 
     output_canvas.cd()
     if x == 'p':

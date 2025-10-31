@@ -15,6 +15,7 @@ class BaseBDTModel:
         self.model = None
         self.classes_ = None
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.xgb_params = None
     
     def fit(self, X: np.ndarray, y: np.ndarray, **kwargs) -> Dict:
         """Fit the model. Must be implemented by subclasses."""

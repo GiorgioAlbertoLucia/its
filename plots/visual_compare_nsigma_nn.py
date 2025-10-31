@@ -1,7 +1,6 @@
-from typing import List, Dict
-from ROOT import TDirectory, TFile, TCanvas, TLegend, kOrange, kAzure, TPaveText, kGreen, kRed, kViolet, TLatex
-import ROOT
-from particle import Particle
+from typing import Dict
+from ROOT import TDirectory, TFile, TCanvas
+from ROOT import kBlack, kBlue, kMagenta, kRed, kGreen, kOrange, kViolet, kAzure
 
 from torchic.utils.terminal_colors import TerminalColors as tc
 
@@ -12,21 +11,6 @@ from utils.utils import set_root_object
 from utils.plot_utils import get_alice_watermark, init_legend
 
 import re
-
-# debugging
-import sys, gc, weakref, traceback
-_alive_objects = []        # keep strong refs for quick tests
-_monitors = []             # holder objects used to detect __del__
-
-class _Holder:
-    def __init__(self, obj, name):
-        self.obj = obj
-        self.name = name
-    def __del__(self):
-        # prints when Python finalizes the holder (so the wrapper went away)
-        print(f"*** HOLDER __del__ for {self.name} (id={id(self.obj)})")
-# debugging
-
 
 def replace_nth(string, sub, wanted, n):
     where = [m.start() for m in re.finditer(sub, string)][n-1]
@@ -44,7 +28,7 @@ def curve_comparison(files: Dict[str, TDirectory], pdf_output_file: str, particl
     canvas.SetLeftMargin(0.15)
     particle_latex = LATEX_PARTICLE.get(particle, particle)
 
-    colors = [kOrange-3, kViolet+2, kAzure+1, kGreen+2, kRed+1]
+    colors = [kOrange-3, kViolet+2, kAzure+1, kGreen+2, kRed+1, kMagenta+2, kBlack, kBlue, kGreen+3, kRed+3]
     
     for imomentum in range(len(momentum_bins)-1):
         
@@ -91,8 +75,9 @@ def compare_nsigma_ml():
         'n#sigma_{ITS}': TFile.Open('/home/galucia/its/plots/output/LHC24_pass1_skimmed_roc_curve_nsigmaITS_p.root', 'READ'),
         'NN': TFile.Open('/home/galucia/its/output/nn/results.root', 'READ'),
         'NN (no L0,1)': TFile.Open('/home/galucia/its/output/nn/results_no_L01.root', 'READ'),
-        'BDT (momentum-aware)': TFile.Open('/home/galucia/its/output/bdt_new/results_momentum_aware.root', 'READ'),
-        'BDT (ensemble)': TFile.Open('/home/galucia/its/output/bdt_new/results_bdt_ensemble.root', 'READ'),
+        'BDT (momentum-aware)': TFile.Open('/home/galucia/its/output/bdt/results_momentum_aware.root', 'READ'),
+        'BDT (momentum-aware-optuna)': TFile.Open('/home/galucia/its/output/bdt/results_momentum_aware_optuna.root', 'READ'),
+        'BDT (ensemble)': TFile.Open('/home/galucia/its/output/bdt/results_bdt_ensemble.root', 'READ'),
     }
     
     output_file_pdf = 'output/nsigma_nn_comparison.pdf'
@@ -131,5 +116,5 @@ def compare_nn_configurations():
 
 if __name__ == '__main__':
 
-    #compare_nsigma_ml()
-    compare_nn_configurations()
+    compare_nsigma_ml()
+    #compare_nn_configurations()

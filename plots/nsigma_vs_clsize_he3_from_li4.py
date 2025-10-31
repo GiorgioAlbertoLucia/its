@@ -42,10 +42,10 @@ def visualise_cluster_size_he3(dataset: Dataset, pdf_file_path:str):
 
     axis_spec_nsigma = AxisSpec(80, -2., 2., 'nsigma', 
                                 f';#it{{p}}/#it{{Z}} (GeV/#it{{c}});n#sigma_{{TPC}} (^{{3}}He);')
-    axis_spec_clsize = AxisSpec(222, 0, 17.5, 'AvgClSizeCosLam', ';n#sigma_{{TPC}} (^{{3}}He);#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+    axis_spec_clsize = AxisSpec(222, 0, 17.5, 'AvgClSizeCosLam', ';n#sigma_{{TPC}} (^{{3}}He);#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
 
     h2_nsigma = dataset.build_th2('fNSigmaTPCHe3', f'fAvgClSizeCosLam', axis_spec_nsigma, axis_spec_clsize,
-                                    title=';n#sigma_{TPC} (^{3}He);#LT ITS Cluster size#GT #times #LT cos#lambda#GT;')
+                                    title=';n#sigma_{TPC} (^{3}He);#LT ITS Cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     
     canvas = TCanvas(f'c_he3', '', 800, 600)
     canvas.SetLeftMargin(0.15)
@@ -68,7 +68,7 @@ def visualise_cluster_size_he3(dataset: Dataset, pdf_file_path:str):
     h3_text.SetTextColor(0)
 
     h2_nsigma.Draw('col')
-    h2_nsigma.SetTitle(';n#sigma_{TPC} (^{3}He);#LT ITS cluster size#GT #times #LT cos#lambda#GT;')
+    h2_nsigma.SetTitle(';n#sigma_{TPC} (^{3}He);#LT ITS cluster size#kern[1]{#GT} #times #LT cos#lambda#kern[1]{#GT};')
     watermark = get_alice_watermark(0.17, 0.71, 0.44, 0.83)
     watermark.Draw('same')
     he3_text.Draw('same')

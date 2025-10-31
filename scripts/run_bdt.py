@@ -38,12 +38,17 @@ def main():
             n_jobs=30,
             verbosity=0
         ),
+
+        # Optuna settings
+        use_optuna=True,
+        save_output_optuna=False,
         
         # Output
         output_dir=Path("../output/bdt"),
         #output_file_suffix="_bdt_ensemble",
-        output_file_suffix="_momentum_aware",
-        save_plots=True
+        output_file_suffix="_momentum_aware_optuna",
+        save_plots=True,
+        run_shap_analysis=False,
     )
     
     # Run pipeline
