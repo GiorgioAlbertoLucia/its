@@ -1,1 +1,2 @@
-/data/galucia/its_pid/AOD_raw/LHC25a3_AOD1.root
+/data/galucia/its_pid/AOD_raw/LHC24an_AOD1.root
+/data/galucia/its_pid/AOD_raw/LHC24an_AOD2.root

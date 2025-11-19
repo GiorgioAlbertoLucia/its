@@ -1,12 +1,12 @@
 LOGFILE="output.log"
-CONF="-b --full_config json://configuration.json"
-#CONF="-b --configuration json://configuration_nonmc.json"
+#CONF="-b --configuration json://full_config.json"
+CONF="-b --configuration json://configuration_nonmc.json"
 OUTPUT_DIR="--aod-writer-json output_director.json"
 INPUT="--aod-file @input_data.txt"
 
 o2-analysis-lf-cluster-studies-tree-creator $CONF |
     
-    o2-analysis-mccollision-converter $CONF |
+    #o2-analysis-mccollision-converter $CONF |
     
     o2-analysis-propagationservice $CONF |
     o2-analysis-trackselection $CONF |

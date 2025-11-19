@@ -420,20 +420,21 @@
       "cascadeBuilderOpts.mc_addGeneratedXiMinus":"1",
       "mc_findableMode":"0"
       },
-    "ft0-corrected-table":  {
+    "ft0-corrected-table": {
       "ccdb-timestamp":"-1",
-      "resoFT0C":"5.65",
+      "resoFT0C":"20",
       "ccdb-path-grplhcif":"GLO/Config/GRPLHCIF",
-      "resoFT0A":"5.65",
+      "resoFT0A":"20",
       "collisionSystem":"-2",
       "addHistograms":"0",
       "ccdb-url":"http://alice-ccdb.cern.ch",
-      "processWithBypassFT0timeInMC":"1",
-      "processStandard":"0"
-      },
+      "processWithBypassFT0timeInMC":"0",
+      "processStandard":"1"
+    },
     "lf-tree-creator-cluster-studies": {
       "fillV0": "true",
-      "smallTable": "false",
+      "fillExtraTable": "true",
+      "fillCollTable": "true",
       "cfgMaterialCorrection": "0",
       "zVtxMax": "10",
       "downscaleFactor": "0.100000001",
@@ -472,6 +473,14 @@
       "he3setting_nsigmaCutTPC": "2",
       "he3setting_tofmasslow": "1.79999995",
       "he3setting_tofmasshigh": "4.19999981",
+      "electronsetting_maxNsigmaDca3d": "0.1",
+      "electronsetting_minNsigmatpcEl": "-2.5",
+      "electronsetting_maxNsigmatpcEl": "3.5",
+      "electronsetting_maxNsigmatpcPi": "2.",
+      "electronsetting_maxNsigmatpcKa": "2.",
+      "electronsetting_maxNsigmatpcPr": "2.",
+      "electronsetting_maxNsigmatofEl": "4.",
+      "electronsetting_minPt": "0.",
       "setting_BetheBlochParams": {
           "labels_rows": [
               "De",
@@ -506,6 +515,7 @@
       },
       "processDataV0Casc": "true",
       "processDataNuclei": "true",
+      "processDataElectrons": "true",
       "processDataPKPi": "false",
       "processMcV0Casc": "false",
       "processMcNuclei": "false"

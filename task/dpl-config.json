@@ -12,7 +12,6 @@
     },
     "internal-dpl-aod-spawner": "",
     "internal-dpl-aod-index-builder": "",
-    "mc-collision-converter": "",
     "tracks-extra-v002-converter": {
         "processV000ToV002": "false",
         "processV001ToV002": "true"
@@ -79,10 +78,15 @@
             "ccdb-timestamp": "0",
             "useNetworkCorrection": "true",
             "autofetchNetworks": "true",
-            "skipTPCOnly": "false",
+            "skipTPCOnly": "0",
+            "devicesRequiringTPCOnlyPID": {
+                "values": [
+                    "photon-conversion-builder"
+                ]
+            },
             "networkPathLocally": "network.onnx",
             "networkPathCCDB": "Analysis\/PID\/TPC\/ML",
-            "enableNetworkOptimizations": "false",
+            "enableNetworkOptimizations": "true",
             "networkSetNumThreads": "0",
             "savedEdxsCorrected": "-1",
             "useCorrecteddEdx": "false",
@@ -117,20 +121,20 @@
             "networkBetaGammaCutoff": "0.449999988",
             "ccdb-path-grplhcif": "GLO\/Config\/GRPLHCIF"
         },
-        "processTracksIU": "false",
+        "processTracksIU": "true",
         "processTracksIUWithTracksQA": "false",
-        "processTracksMCIU": "true"
+        "processTracksMCIU": "false"
     },
     "ft0-corrected-table": {
-        "resoFT0A": "5.6500001",
-        "resoFT0C": "5.6500001",
+        "resoFT0A": "20",
+        "resoFT0C": "20",
         "addHistograms": "false",
         "collisionSystem": "-2",
         "ccdb-url": "http:\/\/alice-ccdb.cern.ch",
         "ccdb-path-grplhcif": "GLO\/Config\/GRPLHCIF",
         "ccdb-timestamp": "-1",
-        "processStandard": "false",
-        "processWithBypassFT0timeInMC": "true"
+        "processStandard": "true",
+        "processWithBypassFT0timeInMC": "false"
     },
     "propagation-service": {
         "ccdburl": "http:\/\/alice-ccdb.cern.ch",
@@ -530,8 +534,8 @@
                 ]
             }
         },
-        "processRealData": "false",
-        "processMonteCarlo": "true",
+        "processRealData": "true",
+        "processMonteCarlo": "false",
         "processRealDataWithPID": "false",
         "processMonteCarloWithPID": "false"
     },
@@ -643,11 +647,8 @@
     },
     "lf-tree-creator-cluster-studies": {
         "fillV0": "true",
-        "fillK": "true",
-        "fillDe": "true",
-        "fillHe3": "true",
-        "fillPKPPi": "true",
-        "smallTable": "false",
+        "fillExtraTable": "true",
+        "fillCollTable": "true",
         "cfgMaterialCorrection": "0",
         "zVtxMax": "10",
         "downscaleFactor": "0.100000001",
@@ -666,18 +667,25 @@
         "v0setting_nsigmaTPC": "4",
         "v0setting_massWindowLambda": "0.0599999987",
         "v0setting_massWindowK0s": "0.00999999978",
-        "v0setting_nsigmaTPCEl": "1",
         "v0setting_nsigmaTPCPi": "2",
         "v0setting_nsigmaTPCPr": "2",
         "lambdasetting_qtAPcut": "0.0199999996",
         "lambdasetting_pmin": "0",
-        "electron_conversion_rmin": "1.75999999",
-        "electron_conversion_rmax": "19.7700005",
         "casc_setting_dcaV0daughters": "0.100000001",
         "casc_setting_cosPA": "0.99000001",
         "casc_setting_massWindowOmega": "0.0199999996",
         "casc_setting_massWindowXi": "0.00999999978",
         "casc_setting_nsigmaTPC": "2",
+        "electron_conversion_rmin": "1.75999999",
+        "electron_conversion_rmax": "19.7700005",
+        "electronsetting_maxNsigmaDca3d": "0.100000001",
+        "electronsetting_minNsigmaTPCEl": "-2.5",
+        "electronsetting_maxNsigmaTPCEl": "3.5",
+        "electronsetting_maxNsigmaTPCPi": "2",
+        "electronsetting_maxNsigmaTPCKa": "2",
+        "electronsetting_maxNsigmaTPCPr": "2",
+        "electronsetting_maxNsigmaTOFEl": "4",
+        "electronsetting_minPt": "0",
         "desetting_nClsIts": "6",
         "desetting_nsigmaCutTPC": "2",
         "desetting_nsigmaCutTOF": "2",
@@ -718,11 +726,13 @@
                 ]
             ]
         },
-        "processDataV0Casc": "false",
-        "processDataNuclei": "false",
+        "processDataV0Casc": "true",
+        "processDataElectrons": "true",
+        "processDataNuclei": "true",
         "processDataPKPi": "false",
-        "processMcV0Casc": "true",
-        "processMcNuclei": "true"
+        "processMcV0Casc": "false",
+        "processMcElectrons": "false",
+        "processMcNuclei": "false"
     },
     "internal-dpl-aod-writer": "",
     "internal-dpl-aod-global-analysis-file-sink": "",
