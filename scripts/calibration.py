@@ -217,6 +217,11 @@ def visualize_fit_results(dataset, fit_results_df, particle, bg_min, bg_max, par
     c_resolution = TCanvas('c_resolution', 'c_resolution', 800, 600)
     g_resolution.Draw('ap')
     f_resolution.Draw('same')
+
+    g_contamination = None
+    if 'contamination' in fit_results_df.columns:
+        g_contamination = create_graph(fit_results_df, 'x', 'contamination', 'x_error', 0., 
+                                f'g_contamination', f';{x_dict["axis_title"]};Contamination')
     
     pid_params = (f_mean.GetParameter(0), f_mean.GetParameter(1), f_mean.GetParameter(2),
                   f_resolution.GetParameter(0), f_resolution.GetParameter(1), f_resolution.GetParameter(2))
@@ -232,6 +237,8 @@ def visualize_fit_results(dataset, fit_results_df, particle, bg_min, bg_max, par
     particle_dir.cd()
     c_mean.Write()
     g_sigma.Write()
+    if g_contamination:
+        g_contamination.Write()
     c_resolution.Write()
     h2_nsigma.Write()
 
@@ -285,7 +292,7 @@ def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str,
             model = RooAddPdf('model', 'signal + bkg', [signal, bkg], [sig_frac])
 
             if h_clsize.GetEntries() > 30:
-                means, covariances = initialize_means_and_covariances(h_clsize, 2)
+                means, covariances = initialize_means_and_covariances(h_clsize, 2, method='kmeans')
                 mean_sig, sigma_sig = (means[1], np.sqrt(covariances[1]))
                 mean_bkg, sigma_bkg = (means[0], np.sqrt(covariances[0]))
 
@@ -297,13 +304,16 @@ def calibration_routine(dataset: Dataset, outfile: TFile, params_file_path: str,
         else:
             model = signal
             if h_clsize.GetEntries() > 30:
-                means, sigmas = initialize_means_and_covariances(h_clsize, 1)
+                means, sigmas = initialize_means_and_covariances(h_clsize, 1, method='kmeans')
                 signal_pars['mean'].setVal(means[0])
                 signal_pars['sigma'].setVal(np.sqrt(sigmas[0]))
 
-        frame, fit_results = calibration_fit_slice(model, h_clsize, clsize, signal_pars, x_low_edge, x_high_edge)
+        frame, fit_results = calibration_fit_slice(model, h_clsize, clsize, signal_pars, x_low_edge, x_high_edge,
+                                                   draw_param_on=True)
         fit_results['x'] = np.abs(ix)
         fit_results['x_error'] = x_error
+        if 'bkg' in model.GetTitle():
+            fit_results['contamination'] = 1 - sig_frac.getVal()
         if fit_results_df is None:
             fit_results_df = pd.DataFrame.from_dict([fit_results])
         else:
